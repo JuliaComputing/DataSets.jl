@@ -3,6 +3,10 @@ uuid = "c9661210-8a83-48f0-b833-72e62abce419"
 authors = ["Chris Foster <chris42f@gmail.com> and contributors"]
 version = "0.1.0"
 
+[deps]
+REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+ReplMaker = "b873ce64-0db9-51f5-a568-4457d8e49576"
+
 [compat]
 julia = "1"
 

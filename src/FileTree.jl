@@ -8,34 +8,6 @@
 
 abstract type AbstractFileTree; end
 
-#=
-function _joinpath_components(ex)
-    if ex isa Symbol
-        string(ex)
-    elseif ex isa Expr
-        if ex.head == :call
-            if ex.args[1] in (:/, :\)
-                reduce(vcat, map(_joinpath_components, ex.args[2:end]))
-            elseif ex.args[1] == :-
-                join(map(_joinpath_components, ex.args), ".")
-            else
-                error("Path component $ex not supported")
-            end
-        elseif ex.head == :(.) && ex.args[1] isa Symbol && ex.args[2] isa QuoteNode
-            string(ex.args[1]) * "." * string(ex.args[2].value)
-        else
-            error("Path component $ex not supported")
-        end
-    else
-        ex
-    end
-end
-
-macro joinpath(ex)
-    :(joinpath($(_joinpath_components(ex)...)))
-end
-=#
-
 macro path_str(str)
     components = Vector{Any}(splitpath(str))
     for i in eachindex(components)
@@ -46,74 +18,90 @@ macro path_str(str)
     :(joinpath($(components...)))
 end
 
-# TODO: Use FilePathsBase?
-struct FilePath
+struct FileTreeRoot
+    path::String
+    readonly::Bool
+end
+
+function FileTreeRoot(path::AbstractString; readonly::Bool=true)
+    path = abspath(path)
+    if !isdir(path)
+        throw(ArgumentError("$(repr(path)) must be a directory"))
+    end
+    FileTreeRoot(path, readonly)
+end
+
+Base.joinpath(root::FileTreeRoot, path::AbstractString) = joinpath(root.path, path)
+Base.abspath(root::FileTreeRoot) = root.path
+
+# DataPath & DataTree - too generic
+
+struct File
+    root::FileTreeRoot
     path::String
 end
 
-struct DirEntry
-    isdir::Bool
-    name::String
+Base.abspath(file::File) = joinpath(file.root, file.path)
+Base.basename(file::File) = basename(file.path)
+Base.isdir(file::File) = false
+Base.isfile(file::File) = true
+
+function Base.show(io::IO, ::MIME"text/plain", file::File)
+    print(io, "📄 ", repr(file.path), " @ ", abspath(file.root))
 end
 
 struct FileTree <: AbstractFileTree
+    root::FileTreeRoot
     path::String
-    children::Vector{DirEntry}
 end
 
-function FileTree(path::AbstractString)
-    # Note: Would get the isdir() for free if using libuv directly
-    childnames = readdir(path)
-    children = [DirEntry(isdir(joinpath(path, name)), name) for name in childnames]
-    FileTree(path, children)
-end
-
-function Base.show(io::IO, tree::FileTree)
-    print(io, FileTree, '(', repr(tree.path), " #= ", length(tree), " children =#)")
-end
+FileTree(path::AbstractString) = FileTree(FileTreeRoot(path), ".")
+FileTree(root::FileTreeRoot) = FileTree(root, ".")
 
 function Base.show(io::IO, ::MIME"text/plain", tree::FileTree)
-    println(io, "FileTree at ", repr(tree.path), " with ", length(tree), " children:")
-    for (i, c) in enumerate(tree.children)
+    children = collect(tree)
+    println(io, "FileTree ", repr(tree.path), " @ ", abspath(tree.root))
+    for (i, c) in enumerate(children)
         # Cute version using the 📁 (or 📂?) symbol.
         # Should we tone it down or go even further using '📄'?
-        print(io, " ", c.isdir ? "📁" : "  ", " ", c.name)
-        if i != length(tree.children)
+        print(io, " ", isdir(c) ? '📁' : '📄', " ", basename(c))
+        if i != length(children)
             print(io, '\n')
         end
     end
 end
 
-Base.IteratorSize(tree::FileTree) = Base.HasLength()
-Base.length(tree::FileTree) = length(tree.children)
+Base.isdir(tree::FileTree) = true
+Base.isfile(tree::FileTree) = false
 
-function Base.getindex(tree::FileTree, i::Int)
-    child = tree.children[i]
-    path = joinpath(tree.path, child.name)
-    # Could do caching here...
-    return child.isdir ? FileTree(path) : FilePath(path)
-end
+Base.abspath(tree::FileTree) = joinpath(tree.root, tree.path)
+Base.basename(tree::FileTree) = basename(tree.path)
 
-function Base.getindex(tree::FileTree, name::AbstractString)
-    for (i, c) in enumerate(tree.children)
-        if c.name == name
-            return tree[i]
-        end
+Base.getindex(tree::FileTree, name::AbstractString) = joinpath(tree, name)
+
+Base.IteratorSize(tree::FileTree) = Base.SizeUnknown()
+function Base.iterate(tree::FileTree, state=nothing)
+    if state == nothing
+        children = readdir(abspath(tree))
+        itr = iterate(children)
+    else
+        (children, cstate) = state
+        itr = iterate(children, cstate)
     end
-    throw(KeyError(name))
-end
-
-function Base.iterate(tree::FileTree, state = 1)
-    state <= length(tree.children) || return nothing
-    (tree[state], state+1)
+    if itr == nothing
+        return nothing
+    else
+        (name, cstate) = itr
+        (joinpath(tree, name), (children, cstate))
+    end
 end
 
 function Base.joinpath(tree::FileTree, xs...)
     p = joinpath(tree.path, joinpath(xs...))
     if isdir(p)
-        FileTree(p)
+        FileTree(tree.root, p)
     elseif isfile(p)
-        FilePath(p)
+        File(tree.root, p)
     else
         error("Path $p doesn't exist")
     end
