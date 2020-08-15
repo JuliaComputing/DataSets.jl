@@ -4,12 +4,18 @@
 # * Git: trees        blobs
 # * S3:  prefixes     blobs
 # * HDF5 group        data
+# * Zip
 #
 
 abstract type AbstractFileTree; end
 
+"""
+    A tool to write relative path literals succinctly
+"""
 macro path_str(str)
-    components = Vector{Any}(splitpath(str))
+    # FIXME: This is system-independent which is good, but root paths can be
+    # truly weird, especially on windows.
+    components = Vector{Any}(split(str, '/'))
     for i in eachindex(components)
         if startswith(components[i], '$')
             components[i] = esc(Symbol(components[i][2:end]))
@@ -63,7 +69,6 @@ function Base.show(io::IO, ::MIME"text/plain", tree::FileTree)
     println(io, "FileTree ", repr(tree.path), " @ ", abspath(tree.root))
     for (i, c) in enumerate(children)
         # Cute version using the 📁 (or 📂?) symbol.
-        # Should we tone it down or go even further using '📄'?
         print(io, " ", isdir(c) ? '📁' : '📄', " ", basename(c))
         if i != length(children)
             print(io, '\n')
@@ -74,8 +79,11 @@ end
 Base.isdir(tree::FileTree) = true
 Base.isfile(tree::FileTree) = false
 
-Base.abspath(tree::FileTree) = joinpath(tree.root, tree.path)
 Base.basename(tree::FileTree) = basename(tree.path)
+
+# NB: abspath is a handy convenience for trees which are explicitly file-based,
+# but can't be part of a general API...
+Base.abspath(tree::FileTree) = joinpath(tree.root, tree.path)
 
 Base.getindex(tree::FileTree, name::AbstractString) = joinpath(tree, name)
 
@@ -98,7 +106,7 @@ end
 
 function Base.joinpath(tree::FileTree, xs...)
     p = joinpath(tree.path, joinpath(xs...))
-    if isdir(p)
+    if isdir(joinpath(tree.root, p))
         FileTree(tree.root, p)
     elseif isfile(p)
         File(tree.root, p)

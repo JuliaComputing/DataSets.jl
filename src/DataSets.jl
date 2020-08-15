@@ -5,6 +5,8 @@ using ReplMaker
 #using DBInterface
 using ProtoStructs
 
+export @path_str
+
 # using FilePathsBase
 
 # High level design:
