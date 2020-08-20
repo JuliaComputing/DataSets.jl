@@ -1,11 +1,15 @@
 # Many datasets have tree-like indices.  Examples:
 #
-# * OS:  directories  files
-# * Git: trees        blobs
-# * S3:  prefixes     blobs
-# * HDF5 group        data
-# * Zip
+#        Index        Data
 #
+# * OS:  directories           files
+# * Git: trees                 blobs
+# * S3:  prefixes              blobs
+# * HDF5 group                 typed data
+# * Zip  flattend directory(?) blobs
+#
+
+export @path_str
 
 abstract type AbstractFileTree; end
 
@@ -14,7 +18,7 @@ abstract type AbstractFileTree; end
 """
 macro path_str(str)
     # FIXME: This is system-independent which is good, but root paths can be
-    # truly weird, especially on windows.
+    # truly weird, especially on windows, so this split may not make sense.
     components = Vector{Any}(split(str, '/'))
     for i in eachindex(components)
         if startswith(components[i], '$')
@@ -24,6 +28,8 @@ macro path_str(str)
     :(joinpath($(components...)))
 end
 
+
+#-------------------------------------------------------------------------------
 struct FileTreeRoot
     path::String
     readonly::Bool
@@ -40,8 +46,8 @@ end
 Base.joinpath(root::FileTreeRoot, path::AbstractString) = joinpath(root.path, path)
 Base.abspath(root::FileTreeRoot) = root.path
 
-# DataPath & DataTree - too generic
 
+#-------------------------------------------------------------------------------
 struct File
     root::FileTreeRoot
     path::String
@@ -56,6 +62,8 @@ function Base.show(io::IO, ::MIME"text/plain", file::File)
     print(io, "📄 ", repr(file.path), " @ ", abspath(file.root))
 end
 
+
+#-------------------------------------------------------------------------------
 struct FileTree <: AbstractFileTree
     root::FileTreeRoot
     path::String
@@ -64,7 +72,7 @@ end
 FileTree(path::AbstractString) = FileTree(FileTreeRoot(path), ".")
 FileTree(root::FileTreeRoot) = FileTree(root, ".")
 
-function Base.show(io::IO, ::MIME"text/plain", tree::FileTree)
+function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
     children = collect(tree)
     println(io, "FileTree ", repr(tree.path), " @ ", abspath(tree.root))
     for (i, c) in enumerate(children)
@@ -86,6 +94,7 @@ Base.basename(tree::FileTree) = basename(tree.path)
 Base.abspath(tree::FileTree) = joinpath(tree.root, tree.path)
 
 Base.getindex(tree::FileTree, name::AbstractString) = joinpath(tree, name)
+# ^ TODO: getindex with relative path by indexing with a path type?
 
 Base.IteratorSize(tree::FileTree) = Base.SizeUnknown()
 function Base.iterate(tree::FileTree, state=nothing)
@@ -105,10 +114,21 @@ function Base.iterate(tree::FileTree, state=nothing)
 end
 
 function Base.joinpath(tree::FileTree, xs...)
+    # TODO: Make this separate from getindex?
+    #
+    # Here's the distinction:
+    #  - getindex about indexing the datastrcutre; therefore it looks in the
+    #    filesystem to only return things which exist.
+    #  - joinpath just makes paths, not knowing whether they exist.
     p = joinpath(tree.path, joinpath(xs...))
-    if isdir(joinpath(tree.root, p))
+    absp = joinpath(tree.root, p)
+    if isdir(absp)
         FileTree(tree.root, p)
-    elseif isfile(p)
+    elseif isfile(absp)
+        File(tree.root, p)
+    elseif islink(absp)
+        # TODO - this isn't actually right - broken symlinks are neither files
+        # nor directorys - they may be better returned as a path type?
         File(tree.root, p)
     else
         error("Path $p doesn't exist")

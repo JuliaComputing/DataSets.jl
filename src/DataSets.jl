@@ -1,13 +1,8 @@
 module DataSets
 
-using ReplMaker
-#using SQLite
-#using DBInterface
-using ProtoStructs
+using UUIDs
 
-export @path_str
-
-# using FilePathsBase
+export DataSet, dataset
 
 # High level design:
 #
@@ -18,8 +13,8 @@ export @path_str
 #   the appropriate protocol. Also to understand data governance (eg, can the
 #   dataset be cached) etc etc.
 #
-#   This is (might be?) declarative configuration only; just enough to combine
-#   a data storage backend + data connector.
+#   This is declarative configuration; just enough to combine a data storage
+#   backend + data connector.
 #
 # * Data storage backends - where the actual data is stored. These handle
 #   versioning and persistence. More than one storage backend may hold a given
@@ -32,11 +27,6 @@ export @path_str
 # * Data->compute connectors - this is the code components needed to get data
 #   (local/remote) to the compute (local/remote)
 
-# Metadata can produce the connector:
-#
-# get_connector(metadata) -> (storage, connector)
-
-#= 
 """
 A `DataSet` is a metadata overlay for data held locally or remotely which is
 unopinionated about the underlying storage mechanism.
@@ -45,10 +35,17 @@ The data in a `DataSet` has a type which implies an index; the index can be
 used to partition the data for processing.
 """
 struct DataSet
-    uuid::UUID     # Random unique ID
-    location       # Filesystem path, URL or other resource location
-    name::String   # Name, used as a default
-    kws
+    default_name::String # Default name for convenience.
+                         # The binding to an actual name is managed by the data
+                         # project.
+    location       # Resource definition (URI?)
+    uuid::UUID     # Unique ID for use in distributed settings
+    decoders       # Specification of the decoder pipeline
+
+    # Generic dictionary of other properties... for now. Required properties
+    # will be moved
+    _other::Dict{Symbol,Any}
+
    #storage_id     # unique identifier in storage backend, if it exists
    #owner          # Project or user who owns the data
    #storage        # 
@@ -61,22 +58,53 @@ struct DataSet
    ## A set of identifiers
    #tags::Set{String}
 end
-=#
 
-@proto DataSet
-    # location
-    # type
-    # prototype
-
-#=
-function DataSet(uuid, location, name; kwargs...)
-    DataSet(uuid, location, name, values(kwargs))
+function DataSet(; default_name, location, uuid=uuid4(), decoders=[], kws...)
+    DataSet(default_name, location, uuid, decoders, Dict{Symbol,Any}(kws))
 end
-=#
+
+# Hacky thing until we figure out which fields DataSet should actually have.
+function Base.getproperty(d::DataSet, name::Symbol)
+    if name in fieldnames(DataSet)
+        return getfield(d, name)
+    else
+        getfield(d, :_other)[name]
+    end
+end
 
 function Base.show(io::IO, d::DataSet)
-    println(io, DataSet, " $(d.type) @ $(repr(d.location))")
+    # TODO: print type
+    println(io, DataSet, " $(d.default_name) @ $(repr(d.location))")
 end
+
+#-------------------------------------------------------------------------------
+"""
+    DataProject
+
+A data project is a collection of DataSets with associated names. Names are
+unique within the project.
+"""
+struct DataProject
+    # TODO: Serialization!
+    datasets::Dict{String,DataSet}
+end
+
+DataProject() = DataProject(Dict{String,DataSet}())
+
+function link_dataset(proj::DataProject, (name,data)::Pair)
+    proj.datasets[name] = data
+end
+
+link_dataset(proj::DataProject, d::DataSet) = link_dataset(proj, d.default_name=>d)
+
+function dataset(proj::DataProject, name)
+    proj.datasets[name]
+end
+
+#-------------------------------------------------------------------------------
+# Dataset lifecycle prototyping - opening and closing etc
+# 
+# WIP!!
 
 """
     Used to close a dataset when an error has occurred.
@@ -85,8 +113,7 @@ function abandon
 end
 
 """
-
-parents - parent datasets used in creating this one.
+parents - parent datasets used in creating this one for provenance tracking
 """
 function Base.open(f::Function, d::DataSet, args...) #; parents=nothing)
     data = open(d, args...) #; parents=parents)
@@ -103,26 +130,30 @@ end
 # _open_methods = Dict(IO=>...)
 
 function Base.open(d::DataSet, args...) #; parents=nothing)
-    type = d.type
-    # The following types refer to *data models*. This may be different from
-    # the underlying storage... I think.
+    location = d.location
+    if location.scheme != "file"
+        error("Only file URI schemes are supported ($location)")
+    end
+    path = location.path
+    # FIXME: decoders isn't quite right.
     #
-    # There's two layers here:
-    #   Data model - a *logical* model of the data
-    #   Data access - Location and technical access means. Can this can be
-    #                 encoded in the path type?
-    if type == "File"
-        # Data model for "File" is really a Blob: a plain sequence of bytes,
+    # FIXME: There's some problem here with data API vs the Module which
+    # implements that API.
+    decoders = d.decoders
+    # The following types refer to *data models*
+    if decoders[1] == "file"
+        # Data model for "file" is really a Blob: a plain sequence of bytes,
         # indexed by the offset.
         #
         # However, is it opened as a stream?
-        open(d.location, args...)
-    elseif type == "Vector{UInt8}"
-        Mmap.mmap(d.location)
+        open(path, args...)
+    elseif decoders[1] == "Vector{UInt8}"
+        Mmap.mmap(path)
         # mmap the file?
-    elseif type == "FileTree"
-    elseif type == "Table"
-    #elseif type == "GitFile"
+    elseif decoders[1] == "tree"
+        FileTree(FileTreeRoot(path, args...))
+    elseif decoders[1] == "table"
+    #elseif decoders[1] == "GitFile"
     else
         error("Unrecognized type $(type)")
     end
@@ -163,12 +194,6 @@ end
 # For IO streams, dispatch to open with the location
 function open(f::Function, d::DataSet, ::Type{IO}, read)
     open(f, d.location, read=read, write=!read)
-end
-
-function abandon()
-end
-
-function commit()
 end
 
 # Context-manager style scoping for opening arguments
@@ -212,43 +237,12 @@ end
 end
 =#
 
-# S3 -> unzip -> traverse tree -> csv decode -> table
-
-# Data models (???)
-
-# Blob
-#@proto File
-
-# Tree-of-blobs
-#@proto Directory
-
-#=
-{
-    "type":"file",
-    "relpath":"file.txt",
-    "basepath": {
-        "type":"git",
-        "location":"/home/chris/.julia/dev/DataSets/scratch/blah"
-    }
-}
-=#
-
-# Interface
-
-#=
-# DataProject
-# name -> uuid binding for current project
-struct DataProject
-    datasets::Vector{Pair{String,UUID}}
-end
-=#
-
-
-# Data storage
-#abstract type AbstractDataStorage end
+#-------------------------------------------------------------------------------
+# Built in Data models
 
 include("FileTree.jl")
 
+# Application-level stuff
 include("repl.jl")
 
 end
