@@ -43,7 +43,7 @@ function make_data_repl_command(cmdstr)
     # Use shell tokenization rules for familiarity
     cmd_tokens = Base.shell_split(cmdstr)
     cmdname = cmd_tokens[1]
-    if cmdname == "link"
+    if cmdname in ("ln", "link")
         # FIXME: Test :incomplete
         if length(cmd_tokens) < 3
             return Expr(:incomplete, "Needs name and location")
@@ -57,15 +57,22 @@ function make_data_repl_command(cmdstr)
         decoders = toks[2:2:end]
         return quote
             name = $name
-            location = $DataApp.expand_location($location)
-            decoders = $DataApp.expand_decoder.($decoders)
+            location = DataSets.DataApp.expand_location($location)
+            decoders = DataSets.DataApp.expand_decoder.($decoders)
             d = DataSets.DataSet(default_name=name, location=location, decoders=decoders)
-            DataSets.link_dataset($DataApp._current_project, name=>d)
+            DataSets.link_dataset(DataSets.DataApp._current_project, name=>d)
+            d
         end
-    elseif cmdname == "list"
+    elseif cmdname == "unlink"
+        name = cmd_tokens[2]
         return quote
-            # FIXME: Which stream should we be using here?
-            DataSets.DataApp.list_datasets(stdout, DataSets.DataApp._current_project)
+            DataSets.unlink_dataset(DataSets.DataApp._current_project, $name)
+            nothing
+        end
+    elseif cmdname in ("ls", "list")
+        return quote
+            # Will be `show()`n by the REPL
+            DataSets.DataApp._current_project
         end
     else
         error("Invalid data REPL syntax: \"$cmdstr\"")

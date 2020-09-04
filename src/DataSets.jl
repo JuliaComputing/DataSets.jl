@@ -74,7 +74,7 @@ end
 
 function Base.show(io::IO, d::DataSet)
     # TODO: print type
-    println(io, DataSet, " $(d.default_name) @ $(repr(d.location))")
+    print(io, DataSet, " $(d.default_name) @ $(repr(d.location))")
 end
 
 #-------------------------------------------------------------------------------
@@ -97,8 +97,34 @@ end
 
 link_dataset(proj::DataProject, d::DataSet) = link_dataset(proj, d.default_name=>d)
 
+function unlink_dataset(proj::DataProject, name::AbstractString)
+    if !haskey(proj.datasets, name)
+        throw(ArgumentError("No dataset \"$name\" in data project"))
+    end
+    d = proj.datasets[name]
+    delete!(proj.datasets, name)
+    d
+end
+
 function dataset(proj::DataProject, name)
     proj.datasets[name]
+end
+
+function Base.show(io::IO, ::MIME"text/plain", proj::DataProject)
+    if isempty(proj.datasets)
+        print(io, "DataProject (empty)")
+        return
+    end
+    println(io, "DataProject:")
+    sorted = sort(collect(proj.datasets), by=first)
+    maxwidth = maximum(textwidth.(first.(sorted)))
+    for (i, (name, data)) in enumerate(sorted)
+        pad = maxwidth - textwidth(name)
+        print(io, "  ", name, ' '^pad, " => ", data.location)
+        if i < length(sorted)
+            println(io)
+        end
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -127,8 +153,24 @@ function Base.open(f::Function, d::DataSet, args...) #; parents=nothing)
     end
 end
 
-# _open_methods = Dict(IO=>...)
+function local_path(d::DataSet)
+    location = d.location
+    if location.scheme != "file"
+        error("Only file URI schemes are supported ($location)")
+    end
+    return location.path
+end
 
+#function opendata(::Type{File}, args...)
+#    File(FileTreeRoot(local_path(path), args...))
+#end
+
+#_open_methods = Dict("file"=>File,
+#                     "Vector{Uint8}"=>
+
+# FIXME: Clearly can't do it this way.
+# Really need a mapping from strings to types which can be extended by user
+# modules, and perhaps a registry of those modules
 function Base.open(d::DataSet, args...) #; parents=nothing)
     location = d.location
     if location.scheme != "file"
@@ -146,7 +188,7 @@ function Base.open(d::DataSet, args...) #; parents=nothing)
         # indexed by the offset.
         #
         # However, is it opened as a stream?
-        open(path, args...)
+        File(FileTreeRoot(path, args...))
     elseif decoders[1] == "Vector{UInt8}"
         Mmap.mmap(path)
         # mmap the file?
@@ -192,7 +234,7 @@ end
 # Generates something like
 
 # For IO streams, dispatch to open with the location
-function open(f::Function, d::DataSet, ::Type{IO}, read)
+function Base.open(f::Function, d::DataSet, ::Type{IO}, read)
     open(f, d.location, read=read, write=!read)
 end
 
@@ -240,7 +282,9 @@ end
 #-------------------------------------------------------------------------------
 # Built in Data models
 
+include("paths.jl")
 include("FileTree.jl")
+include("ZipTree.jl")
 
 # Application-level stuff
 include("repl.jl")

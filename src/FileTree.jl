@@ -9,25 +9,13 @@
 # * Zip  flattend directory(?) blobs
 #
 
-export @path_str
-
+#-------------------------------------------------------------------------------
 abstract type AbstractFileTree; end
 
-"""
-    A tool to write relative path literals succinctly
-"""
-macro path_str(str)
-    # FIXME: This is system-independent which is good, but root paths can be
-    # truly weird, especially on windows, so this split may not make sense.
-    components = Vector{Any}(split(str, '/'))
-    for i in eachindex(components)
-        if startswith(components[i], '$')
-            components[i] = esc(Symbol(components[i][2:end]))
-        end
-    end
-    :(joinpath($(components...)))
-end
+isdir(x::AbstractFileTree) = true
 
+# _joinpath generates and joins OS-specific _local filesystem paths_ from logical paths.
+_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
 
 #-------------------------------------------------------------------------------
 struct FileTreeRoot
@@ -43,40 +31,36 @@ function FileTreeRoot(path::AbstractString; readonly::Bool=true)
     FileTreeRoot(path, readonly)
 end
 
-Base.joinpath(root::FileTreeRoot, path::AbstractString) = joinpath(root.path, path)
-Base.abspath(root::FileTreeRoot) = root.path
-
+_abspath(root::FileTreeRoot) = root.path
+_abspath(ap::AbsPath{FileTreeRoot}) = joinpath(_abspath(ap.root), _joinpath(ap.path))
 
 #-------------------------------------------------------------------------------
 struct File
     root::FileTreeRoot
-    path::String
+    path::RelPath
 end
 
-Base.abspath(file::File) = joinpath(file.root, file.path)
+_abspath(file::File) = joinpath(_abspath(file.root), _joinpath(file.path))
 Base.basename(file::File) = basename(file.path)
 Base.isdir(file::File) = false
 Base.isfile(file::File) = true
 
 function Base.show(io::IO, ::MIME"text/plain", file::File)
-    print(io, "📄 ", repr(file.path), " @ ", abspath(file.root))
+    print(io, "📄 ", file.path, " @ ", _abspath(file.root))
 end
-
 
 #-------------------------------------------------------------------------------
 struct FileTree <: AbstractFileTree
     root::FileTreeRoot
-    path::String
+    path::RelPath
 end
 
-FileTree(path::AbstractString) = FileTree(FileTreeRoot(path), ".")
-FileTree(root::FileTreeRoot) = FileTree(root, ".")
+FileTree(root::FileTreeRoot) = FileTree(root, RelPath())
 
 function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
     children = collect(tree)
-    println(io, "FileTree ", repr(tree.path), " @ ", abspath(tree.root))
+    println(io, "📂 FileTree ", tree.path, " @ ", tree.root)
     for (i, c) in enumerate(children)
-        # Cute version using the 📁 (or 📂?) symbol.
         print(io, " ", isdir(c) ? '📁' : '📄', " ", basename(c))
         if i != length(children)
             print(io, '\n')
@@ -84,22 +68,38 @@ function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
     end
 end
 
-Base.isdir(tree::FileTree) = true
 Base.isfile(tree::FileTree) = false
 
 Base.basename(tree::FileTree) = basename(tree.path)
 
-# NB: abspath is a handy convenience for trees which are explicitly file-based,
-# but can't be part of a general API...
-Base.abspath(tree::FileTree) = joinpath(tree.root, tree.path)
+_abspath(tree::FileTree) = joinpath(_abspath(tree.root), _joinpath(tree.path))
 
-Base.getindex(tree::FileTree, name::AbstractString) = joinpath(tree, name)
-# ^ TODO: getindex with relative path by indexing with a path type?
+# getindex vs joinpath:
+#  - getindex about indexing the datastrcutre; therefore it looks in the
+#    filesystem to only return things which exist.
+#  - joinpath just makes paths, not knowing whether they exist.
+function Base.getindex(tree::FileTree, path::RelPath)
+    relpath = joinpath(tree.path, path)
+    absp = joinpath(_abspath(tree.root), _joinpath(relpath))
+    if isdir(absp)
+        FileTree(tree.root, relpath)
+    elseif isfile(absp)
+        File(tree.root, relpath)
+    elseif islink(absp)
+        AbsPath(tree.root, relpath)
+    else
+        error("Path $absp doesn't exist")
+    end
+end
+
+function Base.getindex(tree::FileTree, name::AbstractString)
+    getindex(tree, joinpath(RelPath(), name))
+end
 
 Base.IteratorSize(tree::FileTree) = Base.SizeUnknown()
 function Base.iterate(tree::FileTree, state=nothing)
     if state == nothing
-        children = readdir(abspath(tree))
+        children = readdir(_abspath(tree))
         itr = iterate(children)
     else
         (children, cstate) = state
@@ -109,32 +109,46 @@ function Base.iterate(tree::FileTree, state=nothing)
         return nothing
     else
         (name, cstate) = itr
-        (joinpath(tree, name), (children, cstate))
+        (tree[name], (children, cstate))
     end
 end
 
-function Base.joinpath(tree::FileTree, xs...)
-    # TODO: Make this separate from getindex?
-    #
-    # Here's the distinction:
-    #  - getindex about indexing the datastrcutre; therefore it looks in the
-    #    filesystem to only return things which exist.
-    #  - joinpath just makes paths, not knowing whether they exist.
-    p = joinpath(tree.path, joinpath(xs...))
-    absp = joinpath(tree.root, p)
-    if isdir(absp)
-        FileTree(tree.root, p)
-    elseif isfile(absp)
-        File(tree.root, p)
-    elseif islink(absp)
-        # TODO - this isn't actually right - broken symlinks are neither files
-        # nor directorys - they may be better returned as a path type?
-        File(tree.root, p)
-    else
-        error("Path $p doesn't exist")
-    end
+function Base.joinpath(tree::FileTree, r::RelPath)
+    # Should this AbsPath be rooted at `tree` rather than `tree.root`?
+    AbsPath(tree.root, joinpath(tree.path, r))
 end
 
+function Base.joinpath(tree::FileTree, s::AbstractString)
+    AbsPath(tree.root, joinpath(tree.path, s))
+end
+
+
+# Mutation
+
+function Base.open(func::Function, f::File; write=false, read=!write)
+    if f.root.readonly && write
+        error("Error writing file at read-only path $f")
+    end
+    open(func, _abspath(f); read=read, write=write)
+end
+
+function Base.open(func::Function, p::AbsPath; write=false, read=!write)
+    if p.root.readonly && write
+        error("Error writing file at read-only path $p")
+    end
+    open(func, _abspath(p); read=read, write=write)
+end
+
+function Base.mkdir(p::AbsPath, args...)
+    if p.root.readonly
+        error("Cannot make directory in read-only tree root at $(_abspath(tree.root))")
+    end
+    mkdir(_abspath(p), args...)
+    return FileTree(p.root, p.path)
+end
+
+#function Base.rm(tree::FileTree; recursive=false)
+#end
 
 # It's interesting to read about the linux VFS interface in regards to how the
 # OS actually represents these things. For example

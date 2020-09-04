@@ -69,7 +69,19 @@ DataSets.jl decouples data processing from the detail of IO and data storage.
 This lets you write data processing code with high level data abstractions,
 without worrying about the detail of file formats.
 
-### What is this data? What was I thinking?
+### Distributed and incremental processing
+
+We need to deal with several levels of abstraction for effective distributed
+processing
+
+* keys - the user works in terms of keys, eg, the indices of an array, the
+  elements of a set, etc.
+* indices - allow data to be looked up via the keys, quickly.
+* partitions - in distributed settings large datasets are partitioned across
+  machines. The user may not want to know about this (typically) but the
+  scheduler does need to know.
+
+### Provenance: What is this data? What was I thinking?
 
 Working with historical data can be confusing and error prone because the
 origin of that data may look like this:
@@ -96,7 +108,6 @@ Interesting links:
 * Watch this talk: *Intro to PROV* by Nicholas Car: https://www.youtube.com/watch?v=elPcKqWoOPg
 * The PROV primer: https://www.w3.org/TR/2013/NOTE-prov-primer-20130430/#introduction
 * https://www.ands.org.au/working-with-data/publishing-and-reusing-data/data-provenance
-
 
 ## DataSets Design 
 
