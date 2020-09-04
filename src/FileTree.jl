@@ -12,7 +12,37 @@
 #-------------------------------------------------------------------------------
 abstract type AbstractFileTree; end
 
-isdir(x::AbstractFileTree) = true
+# The tree API
+
+# TODO: Should we have `istree` separate from `isdir`?
+Base.isdir(x::AbstractFileTree) = true
+
+"""
+    showtree([io,], tree)
+
+Pretty printing of file trees, in the spirit of the unix `tree` utility.
+"""
+function showtree(io::IO, tree::AbstractFileTree)
+    println(io, "📂 ", tree)
+    _showtree(io, tree, "")
+end
+showtree(tree::AbstractFileTree) = showtree(stdout, tree)
+
+function _showtree(io::IO, tree::AbstractFileTree, prefix)
+    children = collect(tree)
+    for (i,x) in enumerate(children)
+        islast = i == lastindex(children) # Ugh! We should be able to avoid the collect...
+        first_prefix = prefix * (islast ? "└──" : "├──")
+        other_prefix = prefix * (islast ? "   " : "│  ")
+        if isdir(x)
+            print(io, first_prefix, "📂 ")
+            printstyled(io, basename(x), "\n", color=:light_blue, bold=true)
+            _showtree(io, x, other_prefix)
+        else
+            println(io, first_prefix, " ", basename(x))
+        end
+    end
+end
 
 # _joinpath generates and joins OS-specific _local filesystem paths_ from logical paths.
 _joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)

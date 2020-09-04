@@ -111,7 +111,7 @@ end
 
 # It appears that ZipFile.jl just doesn't have a way to rewind to the start of
 # one of the embedded files.
-# TODO: Upstream this
+# TODO: Upstream this as an extension of Base.seek()
 function _seek(io::ZipFile.ReadableFile, n::Integer)
     # Only support seeking to the start
     n == 0 || throw(ArguementError("Cannot efficiently seek zip stream to nonzero offset $n"))
