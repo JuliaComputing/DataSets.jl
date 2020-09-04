@@ -44,29 +44,46 @@ function _showtree(io::IO, tree::AbstractFileTree, prefix)
     end
 end
 
+function Base.copy!(dst::AbstractFileTree, src::AbstractFileTree)
+    for x in src
+        newpath = joinpath(dst, basename(x))
+        if isdir(x)
+            newdir = mkdir(newpath)
+            copy!(newdir, x)
+        else
+            open(x) do io_src
+                open(newpath, write=true) do io_dst
+                    write(io_dst, io_src)
+                end
+            end
+        end
+    end
+end
+
 # _joinpath generates and joins OS-specific _local filesystem paths_ from logical paths.
 _joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
 
 #-------------------------------------------------------------------------------
 struct FileTreeRoot
     path::String
-    readonly::Bool
+    read::Bool
+    write::Bool
 end
 
-function FileTreeRoot(path::AbstractString; readonly::Bool=true)
+function FileTreeRoot(path::AbstractString; write=false, read=true)
     path = abspath(path)
     if !isdir(path)
         throw(ArgumentError("$(repr(path)) must be a directory"))
     end
-    FileTreeRoot(path, readonly)
+    FileTreeRoot(path, read, write)
 end
 
 _abspath(root::FileTreeRoot) = root.path
 _abspath(ap::AbsPath{FileTreeRoot}) = joinpath(_abspath(ap.root), _joinpath(ap.path))
 
 #-------------------------------------------------------------------------------
-struct File
-    root::FileTreeRoot
+struct File{Root}
+    root::Root
     path::RelPath
 end
 
@@ -155,23 +172,23 @@ end
 
 # Mutation
 
-function Base.open(func::Function, f::File; write=false, read=!write)
-    if f.root.readonly && write
+function Base.open(func::Function, f::File{FileTreeRoot}; write=false, read=!write)
+    if !f.root.write && write
         error("Error writing file at read-only path $f")
     end
     open(func, _abspath(f); read=read, write=write)
 end
 
 function Base.open(func::Function, p::AbsPath; write=false, read=!write)
-    if p.root.readonly && write
+    if !p.root.write && write
         error("Error writing file at read-only path $p")
     end
     open(func, _abspath(p); read=read, write=write)
 end
 
 function Base.mkdir(p::AbsPath, args...)
-    if p.root.readonly
-        error("Cannot make directory in read-only tree root at $(_abspath(tree.root))")
+    if !p.root.write
+        error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
     end
     mkdir(_abspath(p), args...)
     return FileTree(p.root, p.path)

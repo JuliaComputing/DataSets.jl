@@ -74,6 +74,9 @@ function make_data_repl_command(cmdstr)
             # Will be `show()`n by the REPL
             DataSets.DataApp._current_project
         end
+    elseif cmdname == "show"
+        error("Not implemented")
+        # Idea here could be to open a browser for the data.
     else
         error("Invalid data REPL syntax: \"$cmdstr\"")
     end
