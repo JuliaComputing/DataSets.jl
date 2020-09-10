@@ -36,8 +36,6 @@ end
 
 ZippedFileTree(root::ZipTreeRoot) = ZippedFileTree(root, RelPath())
 
-Base.isfile(tree::ZippedFileTree) = false
-
 Base.basename(tree::ZippedFileTree) = basename(tree.path)
 
 function Base.getindex(tree::ZippedFileTree, path::RelPath)
@@ -137,5 +135,5 @@ function _seek(io::ZipFile.ReadableFile, n::Integer)
     io._zpos = 0
 end
 
-# Is this is ok? The underlying stream can't block...
+# Needed for use as `src` in `write(dst::IO, src::IO)`.
 Base.readavailable(io::ZipFile.ReadableFile) = read(io)

@@ -4,6 +4,10 @@ using UUIDs
 
 export DataSet, dataset
 
+export FileTreeRoot, GitTreeRoot, ZipTreeRoot
+
+export showtree
+
 # High level design:
 #
 #
@@ -184,11 +188,15 @@ function Base.open(d::DataSet, args...) #; parents=nothing)
     decoders = d.decoders
     # The following types refer to *data models*
     if decoders[1] == "file"
-        # Data model for "file" is really a Blob: a plain sequence of bytes,
-        # indexed by the offset.
-        #
-        # However, is it opened as a stream?
-        File(FileTreeRoot(path, args...))
+        if length(decoders) == 1
+            # Data model for "file" is really a Blob: a plain sequence of bytes,
+            # indexed by the offset.
+            #
+            # However, is it opened as a stream?
+            File(FileTreeRoot(path, args...))
+        elseif decoders[2] == "zip"
+            ZippedFileTree(ZipTreeRoot(path, args...))
+        end
     elseif decoders[1] == "Vector{UInt8}"
         Mmap.mmap(path)
         # mmap the file?
@@ -285,6 +293,8 @@ end
 include("paths.jl")
 include("FileTree.jl")
 include("ZipTree.jl")
+include("GitTree.jl")
+# include("S3Tree.jl") ...
 
 # Application-level stuff
 include("repl.jl")

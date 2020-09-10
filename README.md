@@ -3,21 +3,15 @@
 [![Build Status](https://github.com/c42f/DataSets.jl/workflows/CI/badge.svg)](https://github.com/c42f/DataSets.jl/actions)
 
 DataSets.jl **decouples data and code** so that algorithms can work in
-different data environments without changes to the code. This makes it
-easy to *relocate* a computation — for example from your laptop to the
-cloud, to another user's machine, or to an HPC system.
+different data environments without changes to the code. This makes it easy to
+*relocate* a computation — for example from your laptop to the cloud, to
+another user's machine, or to an HPC system.
 
-with a lightweight layer of metadata
-called a `DataSet`. The `DataSet` bridges the gap between data outside stored
-outside your program and the data abstractions within.
+The `DataSet` is a lightweight layer of metadata which bridges the gap between
+data outside your program and the data abstractions within.
 
-
-
-and **records how
-data came to exist**. We aim to make data formats and storage pluggable so you
-can connect your algorithms to new data sources without code changes. We aim to
-record answers the perennial questions "What is this old data? How was it
-generated!?"
+We aim to record answers the perennial questions "What is this old data? How
+was it generated!?"
 
 ## How-to
 
@@ -60,14 +54,22 @@ results over the network to a blob store like Amazon S3. This makes the code
 *less relocatable* between computation environments with varying data storage
 mechanisms.
 
-DataSets.jl provides abstractions for data so **the community can collaborate on
-shared tools for data IO** in a way which is decoupled from user algorithms.
-We want user code to function seamlessly in different data environments by
-adding a little configuration.
+DataSets.jl provides abstractions for data so the community can collaborate on
+shared tools for data IO in a way which is decoupled from user algorithms.  We
+want user code to function seamlessly in different data environments by adding
+a little configuration.
 
-DataSets.jl decouples data processing from the detail of IO and data storage.
-This lets you write data processing code with high level data abstractions,
-without worrying about the detail of file formats.
+### Data Lifecycle
+
+Working with historical data can be confusing and error prone because the
+origin of that data may look like this:
+
+![[xkcd 1838](https://xkcd.com/1838)](https://imgs.xkcd.com/comics/machine_learning.pnghttps://xkcd.com/1838)
+
+The solution is to systematically record how data came to be, including input
+parameters and code version. This *data provenance* information comes from
+your activity as encoded in a possibly-interactive program, but must be stored
+alongside the data.
 
 ### Distributed and incremental processing
 
@@ -81,6 +83,9 @@ processing
   machines. The user may not want to know about this (typically) but the
   scheduler does need to know.
 
+DataSets doesn't provide these things itself — these are up to dataset
+implementations.
+
 ### Provenance: What is this data? What was I thinking?
 
 Working with historical data can be confusing and error prone because the
@@ -88,10 +93,16 @@ origin of that data may look like this:
 
 ![[xkcd 1838](https://xkcd.com/1838)](https://imgs.xkcd.com/comics/machine_learning.pnghttps://xkcd.com/1838)
 
-Of course, the solution to this is to systematically record how data came to
-be, including input parameters and code version. This **data provenance**
-information comes from your activity as encoded in a possibly-interactive
-program, but must be stored alongside the data.
+The solution is to systematically record how data came to be, including input
+parameters and code version. This *data provenance* information comes from
+your activity as encoded in a possibly-interactive program, but must be stored
+alongside the data.
+
+A full data provenance system can't exist without primitives for managing data
+lifecycle.
+
+A full data provenance system is out of scope for DataSets, for now. Instead,
+we provide 
 
 DataSets provides (TODO!!) a systematic way to connect provenance metadata to
 your output data, and tools to make this automatic in practical cases.

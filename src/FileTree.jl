@@ -16,6 +16,7 @@ abstract type AbstractFileTree; end
 
 # TODO: Should we have `istree` separate from `isdir`?
 Base.isdir(x::AbstractFileTree) = true
+Base.isfile(tree::AbstractFileTree) = false
 
 """
     showtree([io,], tree)
@@ -26,7 +27,15 @@ function showtree(io::IO, tree::AbstractFileTree)
     println(io, "📂 ", tree)
     _showtree(io, tree, "")
 end
-showtree(tree::AbstractFileTree) = showtree(stdout, tree)
+
+struct ShowTree
+    tree
+end
+# Use a wrapper rather than defaulting to stdout so that this works in more
+# functional environments such as Pluto.jl
+showtree(tree::AbstractFileTree) = ShowTree(tree)
+
+Base.show(io::IO, s::ShowTree) = showtree(io, s.tree)
 
 function _showtree(io::IO, tree::AbstractFileTree, prefix)
     children = collect(tree)
@@ -81,6 +90,9 @@ end
 _abspath(root::FileTreeRoot) = root.path
 _abspath(ap::AbsPath{FileTreeRoot}) = joinpath(_abspath(ap.root), _joinpath(ap.path))
 
+Base.open(root::FileTreeRoot) = FileTree(root)
+Base.close(root::FileTreeRoot) = nothing
+
 #-------------------------------------------------------------------------------
 struct File{Root}
     root::Root
@@ -97,16 +109,17 @@ function Base.show(io::IO, ::MIME"text/plain", file::File)
 end
 
 #-------------------------------------------------------------------------------
-struct FileTree <: AbstractFileTree
-    root::FileTreeRoot
+struct FileTree{Root} <: AbstractFileTree
+    root::Root
     path::RelPath
 end
 
-FileTree(root::FileTreeRoot) = FileTree(root, RelPath())
+FileTree(root) = FileTree(root, RelPath())
+Base.close(root::AbstractFileTree) = close(tree.root)
 
 function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
     children = collect(tree)
-    println(io, "📂 FileTree ", tree.path, " @ ", tree.root)
+    println(io, "📂 Tree ", tree.path, " @ ", tree.root)
     for (i, c) in enumerate(children)
         print(io, " ", isdir(c) ? '📁' : '📄', " ", basename(c))
         if i != length(children)
@@ -114,8 +127,6 @@ function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
         end
     end
 end
-
-Base.isfile(tree::FileTree) = false
 
 Base.basename(tree::FileTree) = basename(tree.path)
 
@@ -141,6 +152,10 @@ end
 
 function Base.getindex(tree::FileTree, name::AbstractString)
     getindex(tree, joinpath(RelPath(), name))
+end
+
+function Base.haskey(tree::FileTree{FileTreeRoot}, name::AbstractString)
+    ispath(_abspath(joinpath(tree,name)))
 end
 
 Base.IteratorSize(tree::FileTree) = Base.SizeUnknown()
@@ -179,14 +194,14 @@ function Base.open(func::Function, f::File{FileTreeRoot}; write=false, read=!wri
     open(func, _abspath(f); read=read, write=write)
 end
 
-function Base.open(func::Function, p::AbsPath; write=false, read=!write)
+function Base.open(func::Function, p::AbsPath{FileTreeRoot}; write=false, read=!write)
     if !p.root.write && write
         error("Error writing file at read-only path $p")
     end
     open(func, _abspath(p); read=read, write=write)
 end
 
-function Base.mkdir(p::AbsPath, args...)
+function Base.mkdir(p::AbsPath{FileTreeRoot}, args...)
     if !p.root.write
         error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
     end

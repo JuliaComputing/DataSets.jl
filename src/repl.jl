@@ -94,6 +94,8 @@ function init_repl(; start_key = ">")
     nothing
 end
 
+link_dataset(name_and_data::Pair) = link_dataset(_current_project, name_and_data)
+
 function repl_link_dataset(name, accessors)
     @assert length(accessors) == 1
     uri = URIParser.parse_url(accessors[1])
