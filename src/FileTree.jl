@@ -75,6 +75,7 @@ _joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.compone
 #-------------------------------------------------------------------------------
 struct FileTreeRoot
     path::String
+    file_opener
     read::Bool
     write::Bool
 end
@@ -84,7 +85,7 @@ function FileTreeRoot(path::AbstractString; write=false, read=true)
     if !isdir(path)
         throw(ArgumentError("$(repr(path)) must be a directory"))
     end
-    FileTreeRoot(path, read, write)
+    FileTreeRoot(path, open, read, write)
 end
 
 _abspath(root::FileTreeRoot) = root.path
@@ -191,14 +192,14 @@ function Base.open(func::Function, f::File{FileTreeRoot}; write=false, read=!wri
     if !f.root.write && write
         error("Error writing file at read-only path $f")
     end
-    open(func, _abspath(f); read=read, write=write)
+    f.root.file_opener(func, _abspath(f); read=read, write=write)
 end
 
 function Base.open(func::Function, p::AbsPath{FileTreeRoot}; write=false, read=!write)
     if !p.root.write && write
         error("Error writing file at read-only path $p")
     end
-    open(func, _abspath(p); read=read, write=write)
+    f.root.file_opener(func, _abspath(p); read=read, write=write)
 end
 
 function Base.mkdir(p::AbsPath{FileTreeRoot}, args...)

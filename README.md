@@ -2,8 +2,8 @@
 
 [![Build Status](https://github.com/c42f/DataSets.jl/workflows/CI/badge.svg)](https://github.com/c42f/DataSets.jl/actions)
 
-DataSets.jl exists to help manage data, reducing the amount of ad hoc data
-wrangling code you need to write. It's annoying to write
+DataSets.jl exists to help manage data and reduce the amount of data wrangling
+code you need to write. It's annoying to write
 * Command line wrappers which deal with paths to data storage
 * Code to load and save from various *data storage systems* (eg, local
   filesystem data; local git data, downloaders for remote data over various
@@ -18,9 +18,9 @@ to make it easy to *relocate* an algorithm between different data environments
 without code changes. For example from your laptop to the cloud, to another
 user's machine, or to an HPC system.
 
-Status: **Early prototype**! We're still figuring out the basic shape of the
-design. So things will change, but **your input is important**: we need your
-use cases so that the design serves the real needs of people dealing with data.
+**DataSets.jl is an early prototype!** We're still figuring out the basic shape of the
+design. So things will change, but *your input is important*: we need your use
+cases so that the design serves the real needs of people dealing with data.
 
 # Design
 
@@ -34,12 +34,12 @@ without opening it or loading the modules required to do so.
 
 We need to describe
 
-**Storage Backend Location**. Examples:
+*Storage backend* and location. examples:
 * Filesystem, S3, Git server
 * Research data management servers
 * Relational databases
 
-**Data Model**. Examples:
+*Data model*. Examples:
 * Path-indexed tree-like data (Filesystem, Git, S3, Zip, HDF5, ...)
 * Blobs (1D arrays of bytes)
 * Arrays in general (eg, large geospatial rasters)
@@ -56,11 +56,10 @@ Also many other things should be included, for example
 ## Data Projects
 
 For using multiple datasets together — for example, in a scientific project —
-we'd like a `DataProject` type.
-
-A `DataProject` is a binding of convenient names to `DataSet`s. Perhaps it also
-includes the `DataSet` configuration itself, for those datasets which are not
-registered. It might be stored in a Data.toml, in analogy to Project.toml.
+we'd like a `DataProject` type. A `DataProject` is a binding of convenient
+names to `DataSet`s. Perhaps it also maintains the serialized `DataSet`
+information as well for those datasets which are not registered. It might be
+stored in a Data.toml, in analogy to Project.toml.
 
 Maintaince of the data project should occur via a data REPL.
 
@@ -73,10 +72,10 @@ We propose that the normal package system would be a reasonable way to do this;
 we have some precedent here in packages like RDatasets, VegaDatasets,
 GeoDatasets, etc.
 
-The point here would be for the package to distribute the Data.toml metadata
-and any special purpose data loading code. Then hand the configuration over to
+The idea would be for the package to distribute the Data.toml metadata and any
+special purpose data loading code. Then hand this configuration over to
 DataSets.jl to provide a coherent and integrated interface to the data.
-Including downloading, caching, etc.
+Including lifecycle, downloading, caching, etc.
 
 ## Data REPL
 
@@ -88,29 +87,36 @@ What's it for?
 * Conveniently creating `DataSet`s, eg linking and unlinking existing local
   data into the data project
 * Copying/caching data between storage locations
+* ...
 
 ## Data Lifecycle
 
-For example, `open` and `close` verbs for data. Why is this important?
+For example, `open` and `close` verbs for data, caching, garbage collection,
+etc.
 
-It provides events so we can:
+`open/close` are important events which allow us to:
 * Create and commit versions
 * Create and record provenance information
 * Update metadata, such as timestamps (eg for loosely coupled dataflows)
 
-### Versioning
+### Versioning and mutability
 
-Versions are necessarily managed by the data storage backend. For example if a
-dataset is a store of configuration files in a git repo, it's the git repo
-which contains the version information.
+Versions are necessarily managed by the data storage backend. For example:
+* A dataset which is a store of configuration files in a git repo. In this case
+  it's git which manages versions, and the repo which stores the version history.
+* Files on a filesystem have no versioning; the data is always the latest. And
+  this can be a fine performance tradeoff for large or temporary data.
 
-However the `DataSet` should have a standard way of specifying version
-constraints, or tracking the "latest" data in some way. Thinking in terms of
-git concepts, this would be like:
+However the `DataSet` should be able to store version constraints or track the
+"latest" data in some way. In terms of git concepts, this could be
 * Pinning to a particular version tag
-* Declaring that you're following the master branch
+* Following the master branch
 
-Versioning should be tied into the data lifecycle. Conceptually,
+Versioning should be tied into the data lifecycle. Conceptually, the following
+code should
+1. Check that the tree is clean (if it's not, emit an error)
+2. Create a tree data model and pass it to the user as `git_tree`
+3. Commit a new version using the changes made to `git_tree`.
 
 ```julia
 open(dataset("some_git_tree"), write=true) do git_tree
@@ -121,12 +127,7 @@ open(dataset("some_git_tree"), write=true) do git_tree
 end
 ```
 
-`open()` should
-1. Check that the tree is clean (if it's not)
-2. Create a tree data model and pass it to the user as `git_tree`
-3. Commit a new version using the changes made to `git_tree`.
-
-This kind of thing already works in the prototype code - try looking at
+This kind of thing already works in the prototype code - look at
 `DataSets.GitTreeRoot`.
 
 ### Provenance: What is this data? What was I thinking?
@@ -134,7 +135,7 @@ This kind of thing already works in the prototype code - try looking at
 Working with historical data can be confusing and error prone because the
 origin of that data may look like this:
 
-![[xkcd 1838](https://xkcd.com/1838)](https://imgs.xkcd.com/comics/machine_learning.pnghttps://xkcd.com/1838)
+![[xkcd 1838](https://xkcd.com/1838)](https://imgs.xkcd.com/comics/machine_learning.png)
 
 The solution is to systematically record how data came to be, including input
 parameters and code version. This *data provenance* information comes from
@@ -157,6 +158,11 @@ Some interesting links about provenance metadata:
 
 
 ## Data Models
+
+The Data Model is the abstraction which the dataset user interacts with. In
+general this can be provided by some arbitrary Julia code from an arbitrary
+module. We'll need a way to map the `DataSet` into the code which exposes the
+data model.
 
 ### Distributed and incremental processing
 

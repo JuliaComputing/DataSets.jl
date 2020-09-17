@@ -1,6 +1,7 @@
 module DataSets
 
 using UUIDs
+using CSV, CodecZlib
 
 export DataSet, dataset
 
@@ -189,13 +190,15 @@ function Base.open(d::DataSet, args...) #; parents=nothing)
     # The following types refer to *data models*
     if decoders[1] == "file"
         if length(decoders) == 1
-            # Data model for "file" is really a Blob: a plain sequence of bytes,
-            # indexed by the offset.
-            #
-            # However, is it opened as a stream?
-            File(FileTreeRoot(path, args...))
+            open(path, args...)
         elseif decoders[2] == "zip"
             ZippedFileTree(ZipTreeRoot(path, args...))
+        elseif decoders[2] == "gz"
+            if length(decoders) == 2
+                GzipDecompressorStream(open(path))
+            elseif decoders[3] == "csv"
+                CSV.File(GzipDecompressorStream(open(path)))
+            end
         end
     elseif decoders[1] == "Vector{UInt8}"
         Mmap.mmap(path)
@@ -203,7 +206,6 @@ function Base.open(d::DataSet, args...) #; parents=nothing)
     elseif decoders[1] == "tree"
         FileTree(FileTreeRoot(path, args...))
     elseif decoders[1] == "table"
-    #elseif decoders[1] == "GitFile"
     else
         error("Unrecognized type $(type)")
     end
