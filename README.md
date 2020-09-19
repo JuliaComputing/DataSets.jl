@@ -130,6 +130,17 @@ end
 This kind of thing already works in the prototype code - look at
 `DataSets.GitTreeRoot`.
 
+There's at least two quite different use patterns for versioning:
+* Batch update: the entire dataset is rewritten. A bit like
+  `open(filename, write=true, read=false)`. Your classic batch-mode application
+  would function in this mode. You'd also want this when applying updates to
+  the algorithm.
+* Incremental update: some data is incrementally added or removed
+  from the dataset. A bit like `open(filename, read=true, write=true)`. You'd
+  want to use this pattern to support differential dataflow: The upstream input
+  dataset(s) have a diff applied; the dataflow system infers how this
+  propagates, with the resulting patch applied to the output datasets.
+
 ### Provenance: What is this data? What was I thinking?
 
 Working with historical data can be confusing and error prone because the

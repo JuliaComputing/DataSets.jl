@@ -5,32 +5,9 @@ using CSV, CodecZlib
 
 export DataSet, dataset
 
+# Tree stuff.
 export FileTreeRoot, GitTreeRoot, ZipTreeRoot
-
 export showtree
-
-# High level design:
-#
-#
-# * Metadata store - a (distributed) registry of dataset metadata. This allows
-#   us to overlay diverse data storage mechanisms with enough metadata to
-#   ensure we can connect to them at an appropriate resource location and with
-#   the appropriate protocol. Also to understand data governance (eg, can the
-#   dataset be cached) etc etc.
-#
-#   This is declarative configuration; just enough to combine a data storage
-#   backend + data connector.
-#
-# * Data storage backends - where the actual data is stored. These handle
-#   versioning and persistence. More than one storage backend may hold a given
-#   dataset.
-#
-# * Data REPL - this is the way that the user interacts with the metadata
-#   store, and manages moving of data between different data storage backends.
-#   (Eg, pushing from local storage to JuliaHub)
-#
-# * Data->compute connectors - this is the code components needed to get data
-#   (local/remote) to the compute (local/remote)
 
 """
 A `DataSet` is a metadata overlay for data held locally or remotely which is
