@@ -12,6 +12,7 @@ ZipFile = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
 
 [compat]
 ReplMaker = "0.2"
+ZipFile = "0.9"
 julia = "1"
 
 [extras]
