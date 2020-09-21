@@ -28,22 +28,30 @@ Here's the rough shape of the design which is being considered.
 
 ## What is a DataSet?
 
-A `DataSet` is lightweight metadata describing "any" data store and the code to
-load and store to it. We want it to be declarative so you can refer to data
-without opening it or loading the modules required to do so.
+A `DataSet` is lightweight declarative metadata describing "any" data store in
+enough detail to store and load from it, and otherwise know about it.
 
-We need to describe
+Which types of metadata go in a DataSet declaration? The design principle here
+is to describe *what* the data is, but not *how* to open it. This is desirable
+because several modules with different design tradeoffs may open the same data
+set. Yet, it should be possible to share metadata between these. To sharpen the
+distinction of what vs how, imagine using `DataSet` metadata from a language
+other than Julia. If this makes no sense, perhaps it is *how* rather than
+*what*.
 
-*Storage backend* and location. examples:
+As examples of the kinds of things we need to describe data, we have:
+
+*Storage backend* and location. Examples:
 * Filesystem, S3, Git server
 * Research data management servers
 * Relational databases
 
-*Data model*. Examples:
-* Path-indexed tree-like data (Filesystem, Git, S3, Zip, HDF5, ...)
-* Blobs (1D arrays of bytes)
-* Arrays in general (eg, large geospatial rasters)
-* Tables
+*Data format* and encoding. Examples:
+* filesystem tree, zip, tar, HDF5
+* csv (including metadata to disambiguate the [many flavous of CSV](https://juliadata.github.io/CSV.jl/stable/#CSV.File))
+* image encodings; jpeg, png, tiff, ...
+* JLD / JLD2
+* zlib, bzip2, lz4, xz, ...
 
 Also many other things should be included, for example
 * default name
@@ -174,6 +182,14 @@ The Data Model is the abstraction which the dataset user interacts with. In
 general this can be provided by some arbitrary Julia code from an arbitrary
 module. We'll need a way to map the `DataSet` into the code which exposes the
 data model.
+
+Examples, including some example storage formats which the data model might
+overlay
+* Path-indexed tree-like data (Filesystem, Git, S3, Zip, HDF5)
+* Arrays (raw, HDF5+path, .npy, many image formats, geospatial rasters on WMTS)
+* Blobs (the unstructured vector of bytes)
+* Tables (csv, tsv, parquet)
+* Julia objects (JLD / JLD2 / `serialize` output)
 
 ### Distributed and incremental processing
 
