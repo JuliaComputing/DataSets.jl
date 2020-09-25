@@ -245,8 +245,12 @@ array of strings)
 
 # Interesting related projects
 
+* [Pkg.Artifacts](https://julialang.github.io/Pkg.jl/v1/artifacts/) solves the
+  problem of downloading "artifacts": immutable containers of content-addressed
+  tree data. Designed for the needs of distributing compiled libraries as
+  dependencies of Julia projects, but can be used for any tree-structured data.
 * [DataDeps.jl](https://github.com/oxinabox/DataDeps.jl) solves the data
-  downloading problem for static data.
+  downloading problem for static remote data.
 * [RemoteFiles.jl](https://github.com/helgee/RemoteFiles.jl) Downloads files from the internet and keeps them updated.
 * [pyarrow.dataset](https://arrow.apache.org/docs/python/dataset.html)
   is restricted to tabular data, but seems similar in spirit to DataSets.jl.
