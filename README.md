@@ -243,3 +243,13 @@ array of strings)
     * Another tree; `isdir(child) == true`
     * Leaf data
 
+# Interesting related projects
+
+* [DataDeps.jl](https://github.com/oxinabox/DataDeps.jl) solves the data
+  downloading problem for static data.
+* [RemoteFiles.jl](https://github.com/helgee/RemoteFiles.jl) Downloads files from the internet and keeps them updated.
+* [pyarrow.dataset](https://arrow.apache.org/docs/python/dataset.html)
+  is restricted to tabular data, but seems similar in spirit to DataSets.jl.
+* [FileTrees.jl](http://shashi.biz/FileTrees.jl) provides tools for
+  representing and processing tree-structured data lazily and in parallel.
+
