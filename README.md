@@ -1,6 +1,6 @@
 # DataSets
 
-[![Build Status](https://github.com/c42f/DataSets.jl/workflows/CI/badge.svg)](https://github.com/c42f/DataSets.jl/actions)
+[![Build Status](https://github.com/JuliaComputing/DataSets.jl/workflows/CI/badge.svg)](https://github.com/JuliaComputing/DataSets.jl/actions)
 
 DataSets.jl exists to help manage data and reduce the amount of data wrangling
 code you need to write. It's annoying to write

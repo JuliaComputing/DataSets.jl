@@ -4,9 +4,10 @@ authors = ["Chris Foster <chris42f@gmail.com> and contributors"]
 version = "0.1.0"
 
 [deps]
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 ReplMaker = "b873ce64-0db9-51f5-a568-4457d8e49576"
-URIParser = "30578b45-9adc-5946-b283-645ec420af67"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 ZipFile = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
 

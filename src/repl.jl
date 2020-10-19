@@ -10,15 +10,19 @@ operations which don't depend on global state.
 module DataApp
 
 using ..DataSets
-import ..DataSets: DataSet, DataProject, link_dataset
+import ..DataSets: DataSet, DataProject, link_dataset, load_project
 
 using REPL: LineEdit
-using URIParser
+using HTTP.URIs
 using ReplMaker
 
 # Global state for Julia session
 
 _current_project = DataProject()
+
+function load_project!(toml_filename::AbstractString)
+    global _current_project = load_project(toml_filename)
+end
 
 # Is allowing this global default good or bad?
 DataSets.dataset(name) = dataset(_current_project, name)
@@ -52,14 +56,14 @@ function make_data_repl_command(cmdstr)
         location = cmd_tokens[3]
         toks = cmd_tokens[4:end]
         if any(toks[1:2:end] .!= "|")
-            error("Expected '|' separated decoders after $location. Got $toks.")
+            error("Expected '|' separated layers after $location. Got $toks.")
         end
-        decoders = toks[2:2:end]
+        layers = toks[2:2:end]
         return quote
             name = $name
             location = DataSets.DataApp.expand_location($location)
-            decoders = DataSets.DataApp.expand_decoder.($decoders)
-            d = DataSets.DataSet(default_name=name, location=location, decoders=decoders)
+            layers = DataSets.DataApp.expand_layer.($layers)
+            d = DataSets.DataSet(default_name=name, location=location, layers=layers)
             DataSets.link_dataset(DataSets.DataApp._current_project, name=>d)
             d
         end
@@ -90,7 +94,8 @@ function init_repl(; start_key = ">")
                        prompt_color = :red,
                        start_key = start_key,
                        sticky_mode=true,
-                       mode_name = "Data_Manager")
+                       mode_name = "Data_Manager",
+                       startup_text=false)
     nothing
 end
 
@@ -98,7 +103,7 @@ link_dataset(name_and_data::Pair) = link_dataset(_current_project, name_and_data
 
 function repl_link_dataset(name, accessors)
     @assert length(accessors) == 1
-    uri = URIParser.parse_url(accessors[1])
+    uri = URI(accessors[1])
     d = DataSet(name=name, location=uri)
     link_dataset(d)
 end
@@ -112,15 +117,20 @@ end
 function expand_location(location)
     path = abspath(location)
     if ispath(path)
-        uri = URIParser.URI("file", "", 0, path)
+        uri = URI("file", "", 0, path)
     else
-        uri = URIParser.parse_url(location)
+        uri = URI(location)
     end
 end
 
-function expand_decoder(decoder)
-    # TODO: expand the short REPL syntax into decoder objects?
-    decoder
+function expand_layer(layer)
+    # TODO: expand the short REPL syntax into layer objects?
+    layer
+end
+
+
+function __init__()
+    init_repl()
 end
 
 end

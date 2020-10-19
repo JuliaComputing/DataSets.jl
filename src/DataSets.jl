@@ -1,13 +1,28 @@
 module DataSets
 
 using UUIDs
-using CSV, CodecZlib
+using HTTP.URIs # TODO: Use standalone URI library!
+using Pkg # For Pkg.TOML
+
+# using CSV, CodecZlib
+# using HDF5
 
 export DataSet, dataset
 
 # Tree stuff.
 export FileTreeRoot, GitTreeRoot, ZipTreeRoot
 export showtree
+
+#-------------------------------------------------------------------------------
+
+struct DataLayer
+    type::String
+    parameters::Vector
+end
+
+function read_toml(::Type{DataLayer}, t)
+    DataLayer(t["type"], collect(get(t, "parameters", [])))
+end
 
 """
 A `DataSet` is a metadata overlay for data held locally or remotely which is
@@ -22,27 +37,37 @@ struct DataSet
                          # project.
     location       # Resource definition (URI?)
     uuid::UUID     # Unique ID for use in distributed settings
-    decoders       # Specification of the decoder pipeline
+    layers::Vector{DataLayer}
 
     # Generic dictionary of other properties... for now. Required properties
     # will be moved
     _other::Dict{Symbol,Any}
 
-   #storage_id     # unique identifier in storage backend, if it exists
-   #owner          # Project or user who owns the data
-   #storage        # 
-   #protocol       # 
-   #description::String
-   #type           # Some representation of the type of data?
-   #               # An array, blob, table, tree, etc
-   #cachable::Bool # Can the data be cached?  It might not for data governance
-   #               # reasons or it might change commonly.
-   ## A set of identifiers
-   #tags::Set{String}
+    #storage_id     # unique identifier in storage backend, if it exists
+    #owner          # Project or user who owns the data
+    #storage        #
+    #protocol       #
+    #description::String
+    #type           # Some representation of the type of data?
+    #               # An array, blob, table, tree, etc
+    #cachable::Bool # Can the data be cached?  It might not for data governance
+    #               # reasons or it might change commonly.
+    ## A set of identifiers
+    #tags::Set{String}
 end
 
-function DataSet(; default_name, location, uuid=uuid4(), decoders=[], kws...)
-    DataSet(default_name, location, uuid, decoders, Dict{Symbol,Any}(kws))
+function DataSet(; default_name, location, uuid=uuid4(), layers, kws...)
+    DataSet(default_name, location, uuid, layers, Dict{Symbol,Any}(kws))
+end
+
+function read_toml(::Type{DataSet}, t)
+    layers = read_toml.(DataLayer, t["layers"])
+    locstring = t["location"]
+    location = URI(locstring)
+    DataSet(default_name = t["default_name"],
+            location = location,
+            uuid = UUID(t["uuid"]),
+            layers = layers)
 end
 
 # Hacky thing until we figure out which fields DataSet should actually have.
@@ -59,6 +84,11 @@ function Base.show(io::IO, d::DataSet)
     print(io, DataSet, " $(d.default_name) @ $(repr(d.location))")
 end
 
+function load_data_toml(filename)
+    toml = Pkg.TOML.parse(read(filename, String))
+    project = toml["dataproject"]
+end
+
 #-------------------------------------------------------------------------------
 """
     DataProject
@@ -67,11 +97,21 @@ A data project is a collection of DataSets with associated names. Names are
 unique within the project.
 """
 struct DataProject
-    # TODO: Serialization!
     datasets::Dict{String,DataSet}
 end
 
 DataProject() = DataProject(Dict{String,DataSet}())
+
+function load_project(filename::AbstractString)
+    toml = Pkg.TOML.parse(read(filename, String))
+    available_datasets = Dict(d.uuid=>d for d in read_toml.(DataSet, toml["datasets"]))
+    proj = DataProject()
+    for entry in toml["dataproject"]["datasets"]
+        id = UUID(entry["uuid"])
+        link_dataset(proj, entry["name"] => available_datasets[id])
+    end
+    proj
+end
 
 function link_dataset(proj::DataProject, (name,data)::Pair)
     proj.datasets[name] = data
@@ -111,7 +151,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Dataset lifecycle prototyping - opening and closing etc
-# 
+#
 # WIP!!
 
 """
@@ -155,42 +195,32 @@ end
 # modules, and perhaps a registry of those modules
 function Base.open(d::DataSet, args...) #; parents=nothing)
     location = d.location
-    if location.scheme != "file"
+    if location.scheme == "file"
+        path = location.path
+    elseif location.scheme == ""
+        path = location.path
+    else
         error("Only file URI schemes are supported ($location)")
     end
-    path = location.path
-    # FIXME: decoders isn't quite right.
-    #
-    # FIXME: There's some problem here with data API vs the Module which
-    # implements that API.
-    decoders = d.decoders
-    # The following types refer to *data models*
-    if decoders[1] == "file"
-        if length(decoders) == 1
-            open(path, args...)
-        elseif decoders[2] == "zip"
-            ZippedFileTree(ZipTreeRoot(path, args...))
-        elseif decoders[2] == "gz"
-            if length(decoders) == 2
-                GzipDecompressorStream(open(path))
-            elseif decoders[3] == "csv"
-                CSV.File(GzipDecompressorStream(open(path)))
-            end
+    layers = d.layers
+    if layers[1].type == "file"
+        if length(layers) == 1
+            return open(path, args...)
+        #elseif layers[2] == "zip"
+        #    ZippedFileTree(ZipTreeRoot(path, args...))
+        # elseif layers[2] == "gzip"
+        #     if length(layers) == 2
+        #         GzipDecompressorStream(open(path))
+        #     elseif layers[3] == "csv"
+        #         # CSV.File(GzipDecompressorStream(open(path)))
+        #     end
         end
-    elseif decoders[1] == "Vector{UInt8}"
-        Mmap.mmap(path)
-        # mmap the file?
-    elseif decoders[1] == "tree"
-        FileTree(FileTreeRoot(path, args...))
-    elseif decoders[1] == "table"
+    elseif layers[1].type == "tree"
+        return FileTree(FileTreeRoot(path, args...))
     else
         error("Unrecognized type $(type)")
     end
 end
-
-# The code wants to have a table.
-#
-# The deployment environment says it's s3://b/data.zip * path/b.csv
 
 #=
 macro datafunc(ex)
@@ -258,13 +288,6 @@ function open_data(f, data_args)
         rethrow()
     end
 end
-
-#=
-# Possible "More Julian" form allowing small data to be returned as values
-# and bound back to the dataset
-@datafunc function bar(x::IO)::IO
-end
-=#
 
 #-------------------------------------------------------------------------------
 # Built in Data models
