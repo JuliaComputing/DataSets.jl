@@ -1,8 +1,7 @@
 module DataSets
 
 using UUIDs
-using HTTP.URIs # TODO: Use standalone URI library!
-using Pkg # For Pkg.TOML
+using Pkg.TOML
 
 # using CSV, CodecZlib
 # using HDF5
@@ -11,74 +10,18 @@ export DataSet, dataset
 
 #-------------------------------------------------------------------------------
 
-struct DataLayer
+#=
+# This type for mapping data
+struct DataMap
     type::String
-    parameters::Vector
+    parameters
 end
 
-function read_toml(::Type{DataLayer}, t)
-    DataLayer(t["type"], collect(get(t, "parameters", [])))
+function read_toml(::Type{DataMap}, t)
+    DataMap(t["type"], collect(get(t, "parameters", [])))
 end
+=#
 
-# The underlying configuration held in a DataSet
-struct DataConfig
-    default_name::String # Default name for convenience.
-                         # The binding to an actual name is managed by the data
-                         # project.
-    location       # Resource definition (URI?)
-    uuid::UUID     # Unique ID for use in distributed settings
-    layers::Vector{DataLayer}
-
-    # Generic dictionary of other properties... for now. Required properties
-    # will be moved
-    _other::Dict{Symbol,Any}
-
-    #storage_id     # unique identifier in storage backend, if it exists
-    #owner          # Project or user who owns the data
-    #storage        #
-    #protocol       #
-    #description::String
-    #type           # Some representation of the type of data?
-    #               # An array, blob, table, tree, etc
-    #cachable::Bool # Can the data be cached?  It might not for data governance
-    #               # reasons or it might change commonly.
-    ## A set of identifiers
-    #tags::Set{String}
-end
-
-function DataConfig(; default_name, location, uuid=uuid4(), layers, kws...)
-    DataConfig(default_name, location, uuid, layers, Dict{Symbol,Any}(kws))
-end
-
-function read_toml(::Type{DataConfig}, t)
-    layers = read_toml.(DataLayer, t["layers"])
-    locstring = t["location"]
-    location = URI(locstring)
-    DataConfig(default_name = t["default_name"],
-               location = location,
-               uuid = UUID(t["uuid"]),
-               layers = layers)
-end
-
-# Hacky thing until we figure out which fields DataConfig should actually have.
-function Base.getproperty(d::DataConfig, name::Symbol)
-    if name in fieldnames(DataConfig)
-        return getfield(d, name)
-    else
-        getfield(d, :_other)[name]
-    end
-end
-
-function Base.show(io::IO, d::DataConfig)
-    print(io, DataConfig, " $(d.default_name) @ $(repr(d.location))")
-end
-
-function load_data_toml(filename)
-    toml = Pkg.TOML.parse(read(filename, String))
-    project = toml["dataproject"]
-end
-
-#-------------------------------------------------------------------------------
 """
 A `DataSet` is a metadata overlay for data held locally or remotely which is
 unopinionated about the underlying storage mechanism.
@@ -86,26 +29,54 @@ unopinionated about the underlying storage mechanism.
 The data in a `DataSet` has a type which implies an index; the index can be
 used to partition the data for processing.
 """
-struct DataSet{Tag}
-    config::DataConfig
+struct DataSet
+    conf
+    #=
+    default_name::String # Default name for convenience.
+                         # The binding to an actual name is managed by the data
+                         # project.
+    uuid::UUID     # Unique ID for use in distributed settings
+    storage        # Storage config and driver definition
+    maps::Vector{DataMap}
+
+    # Generic dictionary of other properties... for now. Required properties
+    # will be moved
+    _other::Dict{Symbol,Any}
+
+    #storage_id     # unique identifier in storage backend, if it exists
+    #owner          # Project or user who owns the data
+    #description::String
+    #type           # Some representation of the type of data?
+    #               # An array, blob, table, tree, etc
+    #cachable::Bool # Can the data be cached?  It might not for data governance
+    #               # reasons or it might change commonly.
+    ## A set of identifiers
+    #tags::Set{String}
+    =#
 end
 
-function DataSet(config::DataConfig)
-    type = last(config.layers).type
-    DataSet{Symbol(type)}(config)
+function read_toml(::Type{DataSet}, toml)
+    @assert haskey(toml, "uuid") &&
+            haskey(toml, "storage") &&
+            haskey(toml, "default_name")
+    DataSet(toml)
+end
+
+# Hacky thing until we figure out which fields DataSet should actually have.
+function Base.getproperty(d::DataSet, name::Symbol)
+    if name in fieldnames(DataSet)
+        return getfield(d, name)
+    else
+        getfield(d, :conf)[string(name)]
+    end
 end
 
 function Base.show(io::IO, d::DataSet)
-    print(io, typeof(d), " $(d.config.default_name) @ $(repr(d.config.location))")
+    print(io, DataSet, " $(d.default_name) @ $(repr(d.location))")
 end
 
-function Base.getproperty(d::DataSet, name::Symbol)
-    c = getfield(d, :config)
-    name === :config ? c : getproperty(c, name)
-end
-
-function read_toml(::Type{DataSet}, t)
-    DataSet(read_toml(DataConfig, t))
+function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
+    TOML.print(io, d.conf)
 end
 
 
@@ -123,11 +94,14 @@ end
 DataProject() = DataProject(Dict{String,DataSet}())
 
 function load_project(filename::AbstractString)
-    toml = Pkg.TOML.parse(read(filename, String))
+    toml_str = read(filename, String)
+    # Super hacky templating for paths relative to the toml file.
+    toml_str = replace(toml_str, "@__DIR__"=>dirname(abspath(filename)))
+    toml = TOML.parse(toml_str)
     available_datasets = Dict(d.uuid=>d for d in read_toml.(DataSet, toml["datasets"]))
     proj = DataProject()
     for entry in toml["dataproject"]["datasets"]
-        id = UUID(entry["uuid"])
+        id = entry["uuid"]
         link_dataset(proj, entry["name"] => available_datasets[id])
     end
     proj
@@ -162,7 +136,7 @@ function Base.show(io::IO, ::MIME"text/plain", proj::DataProject)
     maxwidth = maximum(textwidth.(first.(sorted)))
     for (i, (name, data)) in enumerate(sorted)
         pad = maxwidth - textwidth(name)
-        print(io, "  ", name, ' '^pad, " => ", data.location)
+        print(io, "  ", name, ' '^pad, " => ", data.uuid)
         if i < length(sorted)
             println(io)
         end
@@ -291,39 +265,87 @@ end
 include("paths.jl")
 include("FileTree.jl")
 
-# Prototype stuff. Put this back in once plain files are working.
+# Prototype stuff. Put this back in once the core is working.
 # include("ZipTree.jl")
 # include("GitTree.jl")
 # include("S3Tree.jl") ...
-
+#
 # Application-level stuff
-include("repl.jl")
+# include("repl.jl")
 
 #-------------------------------------------------------------------------------
 
-function Base.open(f::Function, ::Type{IO}, d::DataSet{:File})
-    open(AbsPath, d) do d_path
-        return open(f, d_path)
+"""
+    connect(f, driver, config)
+
+Connect to data storage driver to get a connection `conn` and run `f(conn)`.
+"""
+function connect
+end
+
+_drivers = Dict{String,Any}()
+
+function Base.open(f::Function, as_type, conf::DataSet)
+    storage_config = conf.storage
+    driver = _drivers[storage_config["driver"]]
+    connect(driver, storage_config) do data_resource
+        open(f, as_type, data_resource)
     end
 end
 
-function Base.open(f::Function, ::Type{AbsPath}, d::DataSet{:File})
-    location = d.location
-    if location.scheme == "file"
-        path = location.path
-    elseif location.scheme == "" # FIXME: relative to where ?
-        path = location.path
-    else
-        error("Only file URI schemes are supported ($location)")
-    end
-    p = AbsPath(FileTreeRoot(dirname(path)), RelPath([basename(path)]))
-    f(p)
+# For convenience, this somewhat dodgy function just returns the data handle as
+# opened.
+#
+# If that's a data structure which is fully loaded into memory this is ok and
+# super handy!
+#
+# But if not, the underlying data connection will have been closed by the time
+# this function returns.  TODO: Have some trait or something which can
+# determine whether this is safe.
+Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
+
+#--------------------------------------------------
+
+struct FileSystemFile
+    path::String
 end
 
-function Base.open(f::Function, ::Type{String}, d::DataSet{:File})
-    open(IO, d) do io
-        f(read(io, String))
+push!(_drivers, "FileSystemFile"=>FileSystemFile)
+
+function connect(f, driver::Type{FileSystemFile}, config)
+    path = config["path"]
+    if !isfile(path)
+        throw(ArgumentError("$(repr(path)) must be a file"))
     end
+    file = FileSystemFile(path)
+    f(file)
 end
+
+function Base.open(f::Function, ::Type{IO}, file::FileSystemFile)
+    # TODO writeable files
+    open(f, file.path; read=true, write=false)
+end
+
+function Base.open(f::Function, ::Type{String}, file::FileSystemFile)
+    open(io->read(io,String), IO, file)
+end
+
+
+#--------------------------------------------------
+push!(_drivers, "FileSystemTree"=>FileTreeRoot)
+
+function connect(f, driver::Type{FileTreeRoot}, config)
+    path = config["path"]
+    if !isdir(path)
+        throw(ArgumentError("$(repr(path)) must be a directory"))
+    end
+    root = FileTreeRoot(path)
+    f(root)
+end
+
+function Base.open(f::Function, ::Type{FileTree}, root::FileTreeRoot)
+    f(FileTree(root))
+end
+
 
 end

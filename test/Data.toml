@@ -15,6 +15,8 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 name="a_table"
 uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
+
+#-------------------------------------------------------------------------------
 # This is an array of the actual `DataSet`s. Somewhat unclear whether this
 # should actually be in this file.
 #
@@ -24,72 +26,51 @@ uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 [[datasets]]
 description="A text file"
 default_name="a_text_file"
-location="data/file.txt"
 uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
-[[datasets.layers]]
-type="file"
+    [datasets.storage]
+    driver="FileSystemFile"
+    path="@__DIR__/data/file.txt"
 
-# [[datasets.layers]]
-# type="text"
-# parameters={encoding="UTF-8"}
+    # TODO: We'd like a layering abstraction.
+
+    # [[datasets.maps]]
+    # type="File"
+    #
+    # [[datasets.maps]]
+    # type="text"
+    # parameters={encoding="UTF-8"}
 
 
 #--------------------------------------------------
 [[datasets]]
-description="Compressed tabular data"
-default_name="training log"
+description="Gzipped CSV example"
+default_name="a_table"
 uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
-location="file:///home/chris/.julia/dev/DataSets/test/scratch/people.csv.gz"
 
-[[datasets.layers]]
-type="file"
+    [datasets.storage]
+    driver="FileSystemFile"
+    path="@__DIR__/data/people.csv.gz"
 
-[[datasets.layers]]
-type="gzip"
+    #[[datasets.maps]]
+    #type="File"
 
-[[datasets.layers]]
-type="csv"
-parameters={delim=","}
+    #[[datasets.maps]]
+    #type="GZip"
 
-
-#--------------------------------------------------
-[[datasets]]
-description="Tabular data"
-default_name="age and weight"
-uuid="b69e8e8f-6e57-4a74-971a-086d6444a247"
-location="file:///home/chris/.julia/dev/DataSets/test/scratch/age_and_weight.csv"
-
-[[datasets.layers]]
-type="csv"
+    #[[datasets.maps]]
+    #type="CSV"
+    #parameters={delim=","}
 
 
 #--------------------------------------------------
 [[datasets]]
 default_name="tree_example"
-location="file:///home/chris/.julia/dev/DataSets/test/scratch/csvset"
 uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
-[[datasets.layers]]
-type="tree"
+    [datasets.storage]
+    driver="FileSystemTree"
+    path="@__DIR__/data/csvset"
 
+    # TODO: Add data maps here which expose it logically as a single CSV?
 
-#--------------------------------------------------
-# csvset example
-# [[datasets.layers]]
-# type="glob"
-# parameters = { pattern="*.csv" }
-#
-# [[datasets.layers]]
-# type="csvset"
-# parameters = { partition_col="seqnum" }
-
-
-#--------------------------------------------------
-# [[datasets]]
-# default_name="file_example_default_name"
-# uuid="9e795c07-2678-432f-ad79-7cafd3619118"
-# location=""
-#
-# [[datasets.layers]]
-# type="file"
