@@ -199,7 +199,7 @@ function Base.open(func::Function, p::AbsPath{FileTreeRoot}; write=false, read=!
     if !p.root.write && write
         error("Error writing file at read-only path $p")
     end
-    f.root.file_opener(func, _abspath(p); read=read, write=write)
+    p.root.file_opener(func, _abspath(p); read=read, write=write)
 end
 
 function Base.mkdir(p::AbsPath{FileTreeRoot}, args...)
