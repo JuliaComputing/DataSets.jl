@@ -9,10 +9,6 @@ using Pkg # For Pkg.TOML
 
 export DataSet, dataset
 
-# Tree stuff.
-export FileTreeRoot, GitTreeRoot, ZipTreeRoot
-export showtree
-
 #-------------------------------------------------------------------------------
 
 struct DataLayer
@@ -24,14 +20,8 @@ function read_toml(::Type{DataLayer}, t)
     DataLayer(t["type"], collect(get(t, "parameters", [])))
 end
 
-"""
-A `DataSet` is a metadata overlay for data held locally or remotely which is
-unopinionated about the underlying storage mechanism.
-
-The data in a `DataSet` has a type which implies an index; the index can be
-used to partition the data for processing.
-"""
-struct DataSet
+# The underlying configuration held in a DataSet
+struct DataConfig
     default_name::String # Default name for convenience.
                          # The binding to an actual name is managed by the data
                          # project.
@@ -56,38 +46,68 @@ struct DataSet
     #tags::Set{String}
 end
 
-function DataSet(; default_name, location, uuid=uuid4(), layers, kws...)
-    DataSet(default_name, location, uuid, layers, Dict{Symbol,Any}(kws))
+function DataConfig(; default_name, location, uuid=uuid4(), layers, kws...)
+    DataConfig(default_name, location, uuid, layers, Dict{Symbol,Any}(kws))
 end
 
-function read_toml(::Type{DataSet}, t)
+function read_toml(::Type{DataConfig}, t)
     layers = read_toml.(DataLayer, t["layers"])
     locstring = t["location"]
     location = URI(locstring)
-    DataSet(default_name = t["default_name"],
-            location = location,
-            uuid = UUID(t["uuid"]),
-            layers = layers)
+    DataConfig(default_name = t["default_name"],
+               location = location,
+               uuid = UUID(t["uuid"]),
+               layers = layers)
 end
 
-# Hacky thing until we figure out which fields DataSet should actually have.
-function Base.getproperty(d::DataSet, name::Symbol)
-    if name in fieldnames(DataSet)
+# Hacky thing until we figure out which fields DataConfig should actually have.
+function Base.getproperty(d::DataConfig, name::Symbol)
+    if name in fieldnames(DataConfig)
         return getfield(d, name)
     else
         getfield(d, :_other)[name]
     end
 end
 
-function Base.show(io::IO, d::DataSet)
-    # TODO: print type
-    print(io, DataSet, " $(d.default_name) @ $(repr(d.location))")
+function Base.show(io::IO, d::DataConfig)
+    print(io, DataConfig, " $(d.default_name) @ $(repr(d.location))")
 end
 
 function load_data_toml(filename)
     toml = Pkg.TOML.parse(read(filename, String))
     project = toml["dataproject"]
 end
+
+#-------------------------------------------------------------------------------
+"""
+A `DataSet` is a metadata overlay for data held locally or remotely which is
+unopinionated about the underlying storage mechanism.
+
+The data in a `DataSet` has a type which implies an index; the index can be
+used to partition the data for processing.
+"""
+struct DataSet{Tag}
+    config::DataConfig
+end
+
+function DataSet(config::DataConfig)
+    type = last(config.layers).type
+    DataSet{Symbol(type)}(config)
+end
+
+function Base.show(io::IO, d::DataSet)
+    print(io, typeof(d), " $(d.config.default_name) @ $(repr(d.config.location))")
+end
+
+function Base.getproperty(d::DataSet, name::Symbol)
+    c = getfield(d, :config)
+    name === :config ? c : getproperty(c, name)
+end
+
+function read_toml(::Type{DataSet}, t)
+    DataSet(read_toml(DataConfig, t))
+end
+
 
 #-------------------------------------------------------------------------------
 """
@@ -149,20 +169,11 @@ function Base.show(io::IO, ::MIME"text/plain", proj::DataProject)
     end
 end
 
+
 #-------------------------------------------------------------------------------
-# Dataset lifecycle prototyping - opening and closing etc
-#
-# WIP!!
+# Dataset lifecycle
 
-"""
-    Used to close a dataset when an error has occurred.
-"""
-function abandon
-end
-
-"""
-parents - parent datasets used in creating this one for provenance tracking
-"""
+#=
 function Base.open(f::Function, d::DataSet, args...) #; parents=nothing)
     data = open(d, args...) #; parents=parents)
     try
@@ -174,26 +185,10 @@ function Base.open(f::Function, d::DataSet, args...) #; parents=nothing)
         rethrow()
     end
 end
+=#
 
-function local_path(d::DataSet)
-    location = d.location
-    if location.scheme != "file"
-        error("Only file URI schemes are supported ($location)")
-    end
-    return location.path
-end
-
-#function opendata(::Type{File}, args...)
-#    File(FileTreeRoot(local_path(path), args...))
-#end
-
-#_open_methods = Dict("file"=>File,
-#                     "Vector{Uint8}"=>
-
-# FIXME: Clearly can't do it this way.
-# Really need a mapping from strings to types which can be extended by user
-# modules, and perhaps a registry of those modules
-function Base.open(d::DataSet, args...) #; parents=nothing)
+#=
+function Base.open(d::DataSet, args...)
     location = d.location
     if location.scheme == "file"
         path = location.path
@@ -221,6 +216,7 @@ function Base.open(d::DataSet, args...) #; parents=nothing)
         error("Unrecognized type $(type)")
     end
 end
+=#
 
 #=
 macro datafunc(ex)
@@ -294,11 +290,40 @@ end
 
 include("paths.jl")
 include("FileTree.jl")
-include("ZipTree.jl")
-include("GitTree.jl")
+
+# Prototype stuff. Put this back in once plain files are working.
+# include("ZipTree.jl")
+# include("GitTree.jl")
 # include("S3Tree.jl") ...
 
 # Application-level stuff
 include("repl.jl")
+
+#-------------------------------------------------------------------------------
+
+function Base.open(f::Function, ::Type{IO}, d::DataSet{:File})
+    open(AbsPath, d) do d_path
+        return open(f, d_path)
+    end
+end
+
+function Base.open(f::Function, ::Type{AbsPath}, d::DataSet{:File})
+    location = d.location
+    if location.scheme == "file"
+        path = location.path
+    elseif location.scheme == "" # FIXME: relative to where ?
+        path = location.path
+    else
+        error("Only file URI schemes are supported ($location)")
+    end
+    p = AbsPath(FileTreeRoot(dirname(path)), RelPath([basename(path)]))
+    f(p)
+end
+
+function Base.open(f::Function, ::Type{String}, d::DataSet{:File})
+    open(IO, d) do io
+        f(read(io, String))
+    end
+end
 
 end
