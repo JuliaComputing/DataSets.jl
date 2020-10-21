@@ -6,7 +6,7 @@ using Pkg.TOML
 # using CSV, CodecZlib
 # using HDF5
 
-export DataSet, dataset
+export DataSet, dataset, FileTree, @datafunc, @datarun
 
 #-------------------------------------------------------------------------------
 
@@ -72,7 +72,7 @@ function Base.getproperty(d::DataSet, name::Symbol)
 end
 
 function Base.show(io::IO, d::DataSet)
-    print(io, DataSet, " $(d.default_name) @ $(repr(d.location))")
+    print(io, DataSet, " $(d.default_name) $(repr(d.uuid))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
@@ -140,122 +140,6 @@ function Base.show(io::IO, ::MIME"text/plain", proj::DataProject)
         if i < length(sorted)
             println(io)
         end
-    end
-end
-
-
-#-------------------------------------------------------------------------------
-# Dataset lifecycle
-
-#=
-function Base.open(f::Function, d::DataSet, args...) #; parents=nothing)
-    data = open(d, args...) #; parents=parents)
-    try
-        f(data)
-        # TODO: Distinguish close-with-success vs close-with-failure
-        close(data) #, true)
-    catch
-        abandon(data) #close(data, false)
-        rethrow()
-    end
-end
-=#
-
-#=
-function Base.open(d::DataSet, args...)
-    location = d.location
-    if location.scheme == "file"
-        path = location.path
-    elseif location.scheme == ""
-        path = location.path
-    else
-        error("Only file URI schemes are supported ($location)")
-    end
-    layers = d.layers
-    if layers[1].type == "file"
-        if length(layers) == 1
-            return open(path, args...)
-        #elseif layers[2] == "zip"
-        #    ZippedFileTree(ZipTreeRoot(path, args...))
-        # elseif layers[2] == "gzip"
-        #     if length(layers) == 2
-        #         GzipDecompressorStream(open(path))
-        #     elseif layers[3] == "csv"
-        #         # CSV.File(GzipDecompressorStream(open(path)))
-        #     end
-        end
-    elseif layers[1].type == "tree"
-        return FileTree(FileTreeRoot(path, args...))
-    else
-        error("Unrecognized type $(type)")
-    end
-end
-=#
-
-#=
-macro datafunc(ex)
-    if !Meta.isexpr(ex, :function)
-        throw(ArgumentError("Must pass a function to `@datafunc`. Got `$ex`"))
-    end
-    callex = ex.args[1]
-    @assert Meta.isexpr(callex, :call) # TODO allow other forms
-    nargs = length(callex.args) - 1
-    @assert narg == 0 || !Meta.isexpr(callex.args[1], :parameters) # TODO allow this
-    funcname = callex.args[1]
-    callargs = map(callex.args[2:end]) do arg
-        if !Meta.isexpr(arg, :(::))
-            throw(ArgumentError("Positional parameters must have types. Got `$arg`"))
-        end
-        arg.args
-    end
-    # Generate function override...
-    # output_mask = endswith.(string.(callargs), "!")
-end
-=#
-
-#=
-@datafunc function foo(x::IO, y!::IO)
-end
-=#
-
-# Generates something like
-
-# For IO streams, dispatch to open with the location
-function Base.open(f::Function, d::DataSet, ::Type{IO}, read)
-    open(f, d.location, read=read, write=!read)
-end
-
-# Context-manager style scoping for opening arguments
-function _open_data(f, opened_args)
-    f(opened_args...)
-end
-function _open_data(f, opened_args, to_open, to_open_tail...)
-    d, T, read = to_open
-    # This first call to open() looks at `d` and runs code needed by the
-    # storage model and format.
-    open(d, read) do data_handle
-        # This second call to open() attaches the model to the user's type
-        open(data_handle, T) do d_T
-            _open_data(f, (opened_args..., d_T), to_open_tail...)
-        end
-    end
-end
-
-function open_data(f, data_args)
-    read_data = [d for d in data_args if d[3]]
-    write_data = [d for d in data_args if !d[3]]
-    # TODO: Metadata editing in the data backends.
-    # write_data_handles = [start_commit(d, parents=read_data) for d in write_data]
-    try
-        _open_data(f, (), data_args...)
-        # if d1 in write_data_handles
-        #     finish_commit(d1)
-        # end
-    catch
-        # if d1 in write_data_handles
-        #     abandon_commit(d1)
-        # end
-        rethrow()
     end
 end
 
@@ -342,8 +226,140 @@ function Base.open(f::Function, ::Type{IO}, file::FileSystemFile)
 end
 
 function Base.open(f::Function, ::Type{String}, file::FileSystemFile)
-    open(io->read(io,String), IO, file)
+    open(IO, file) do io
+        f(read(io, String))
+    end
 end
 
+
+#-------------------------------------------------------------------------------
+# Entry point utilities
+#
+# These make it easy for users to open `DataSet`s and map them into types
+# understood by their program.
+
+function extract_dtypes(call)
+    dtypes = []
+    jtypes = []
+    argnames = []
+    for ex in call.args[2:end]
+        @assert ex.head == :call && ex.args[1] == :(=>)
+        @assert ex.args[2].head == :(::) && length(ex.args[2].args) == 2
+        push!(argnames, ex.args[2].args[1])
+        push!(dtypes, ex.args[2].args[2])
+        push!(jtypes, ex.args[3])
+    end
+    argnames, dtypes, jtypes
+end
+
+"""
+    @datafunc function f(x::DT=>T, y::DS=>S...)
+        ...
+    end
+
+Define the function `f(x::T, y::S, ...)` and add data dispatch rules so that
+`f(x::DataSet, y::DataSet)` will open datasets matching dataset types `DT,DS`
+as Julia types `T,S`.
+"""
+macro datafunc(func_expr)
+    @assert func_expr.head == :function
+    call = func_expr.args[1]
+    body = func_expr.args[2]
+    funcname = call.args[1]
+    argnames, dtypes, jtypes = extract_dtypes(call)
+    real_args = [:($n::$t) for (n,t) in zip(argnames, jtypes)]
+    table_name = Symbol("#_$(funcname)_datasets_dispatch")
+    esc_funcname = esc(funcname)
+    esc_table_name = esc(table_name)
+    func_expr.args[1].args[2:end] = real_args
+    quote
+        if !$(esc(:(@isdefined($table_name))))
+            function $esc_funcname(ds::DataSet...)
+                _run($esc_funcname, $esc_table_name, ds...)
+            end
+            const $esc_table_name = Dict()
+        end
+        push!($esc_table_name, tuple($(map(string, dtypes)...)) =>
+                               tuple($(map(esc, jtypes)...)))
+        $(esc(func_expr))
+    end
+end
+
+function datarun(proj::DataProject, func::Function, data_names::AbstractString...)
+    ds = map(n->dataset(proj, n), data_names)
+    func(ds...)
+end
+
+"""
+    @datarun [proj] func(args...)
+
+Run `func` with the named `DataSet`s from the list `args`.
+
+# Example
+
+Load `DataSet`s named a,b as defined in Data.toml, and pass them to `f()`.
+```
+proj = DataSets.load_project("Data.toml")
+@datarun proj f("a", "b")
+```
+"""
+macro datarun(proj, call)
+    esc_funcname = esc(call.args[1])
+    esc_funcargs = esc.(call.args[2:end])
+    quote
+        datarun($(esc(proj)), $esc_funcname, $(esc_funcargs...))
+    end
+end
+
+"""
+    dataset_type(dataset)
+
+Get a string representation of the "DataSet type", which represents the type of
+the data *outside* Julia.
+
+A given DataSet type may be mapped into many different Julia types. For example
+consider the "Blob" type which is an array of bytes (commonly held in a file).
+When loaded into Julia, this may be represented as a
+    * IO             — via open())
+    * String         — via open() |> read(_,String)
+    * Vector{UInt8}  — via mmap)
+    * Path
+"""
+function dataset_type(d::DataSet)
+    # TODO: Enhance this once maps can be applied on top of the storage layer
+    d.storage["type"]
+end
+
+function _openall(func, opened, (dataset,T), to_open...)
+    open(T, dataset) do newly_opened
+        _openall(func, (opened..., newly_opened), to_open...)
+    end
+end
+
+function _openall(func, opened)
+    func(opened...)
+end
+
+# Match `dataset_type` of `ds` against `dispatch_table`, using the match to
+# determine the appropriate Julia types we will open.
+function _run(func, dispatch_table, ds::DataSet...)
+    # For now, uses a simplistic exact matching strategy. We don't use Julia's
+    # builtin dispatch here because
+    # a) It seems wasteful to create a pile of tag types just for the purposes
+    #    of matching some strings
+    # b) It seems like a good idea to separate the declarative "data
+    #    typesystem" (implicitly defined outside Julia) from Julia's type
+    #    system and dispatch rules.
+    dtypes = dataset_type.(ds)
+    if !haskey(dispatch_table, dtypes)
+        table = join(string.(first.(dispatch_table)), "\n")
+        throw(ArgumentError("""No matching function $func for DataSet types $dtypes. Table:
+                            $table
+                            """))
+    end
+    julia_types = dispatch_table[dtypes]
+    to_open = Pair.(ds, julia_types)
+    _openall(func, (), to_open...)
+end
 
 end
