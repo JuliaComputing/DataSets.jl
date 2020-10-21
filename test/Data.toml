@@ -29,7 +29,8 @@ default_name="a_text_file"
 uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
     [datasets.storage]
-    driver="FileSystemFile"
+    driver="FileSystem"
+    type="Blob"
     path="@__DIR__/data/file.txt"
 
     # TODO: We'd like a layering abstraction.
@@ -49,15 +50,13 @@ default_name="a_table"
 uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
     [datasets.storage]
-    driver="FileSystemFile"
+    driver="FileSystem"
+    type="Blob"
     path="@__DIR__/data/people.csv.gz"
 
     #[[datasets.maps]]
-    #type="File"
-
-    #[[datasets.maps]]
     #type="GZip"
-
+    #
     #[[datasets.maps]]
     #type="CSV"
     #parameters={delim=","}
@@ -69,7 +68,8 @@ default_name="tree_example"
 uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
     [datasets.storage]
-    driver="FileSystemTree"
+    driver="FileSystem"
+    type="Tree"
     path="@__DIR__/data/csvset"
 
     # TODO: Add data maps here which expose it logically as a single CSV?

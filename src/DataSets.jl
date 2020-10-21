@@ -288,8 +288,8 @@ _drivers = Dict{String,Any}()
 function Base.open(f::Function, as_type, conf::DataSet)
     storage_config = conf.storage
     driver = _drivers[storage_config["driver"]]
-    connect(driver, storage_config) do data_resource
-        open(f, as_type, data_resource)
+    connect(driver, storage_config) do storage
+        open(f, as_type, storage)
     end
 end
 
@@ -306,19 +306,34 @@ Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
 
 #--------------------------------------------------
 
+struct FileSystemDriver
+end
+
+push!(_drivers, "FileSystem"=>FileSystemDriver())
+
 struct FileSystemFile
     path::String
 end
 
-push!(_drivers, "FileSystemFile"=>FileSystemFile)
+struct FileSystemDir
+    path::String
+end
 
-function connect(f, driver::Type{FileSystemFile}, config)
+function connect(f, driver::FileSystemDriver, config)
     path = config["path"]
-    if !isfile(path)
-        throw(ArgumentError("$(repr(path)) must be a file"))
+    type = config["type"]
+    if type == "Blob"
+        isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
+        storage = FileSystemFile(path)
+    elseif type == "Tree"
+        isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
+        storage = FileSystemDir(path)
     end
-    file = FileSystemFile(path)
-    f(file)
+    f(storage)
+end
+
+function Base.open(f::Function, ::Type{FileTree}, dir::FileSystemDir)
+    f(FileTree(FileTreeRoot(dir.path)))
 end
 
 function Base.open(f::Function, ::Type{IO}, file::FileSystemFile)
@@ -328,23 +343,6 @@ end
 
 function Base.open(f::Function, ::Type{String}, file::FileSystemFile)
     open(io->read(io,String), IO, file)
-end
-
-
-#--------------------------------------------------
-push!(_drivers, "FileSystemTree"=>FileTreeRoot)
-
-function connect(f, driver::Type{FileTreeRoot}, config)
-    path = config["path"]
-    if !isdir(path)
-        throw(ArgumentError("$(repr(path)) must be a directory"))
-    end
-    root = FileTreeRoot(path)
-    f(root)
-end
-
-function Base.open(f::Function, ::Type{FileTree}, root::FileTreeRoot)
-    f(FileTree(root))
 end
 
 
