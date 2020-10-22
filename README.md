@@ -18,48 +18,99 @@ to make it easy to *relocate* an algorithm between different data environments
 without code changes. For example from your laptop to the cloud, to another
 user's machine, or to an HPC system.
 
-**DataSets.jl is an early prototype!** We're still figuring out the basic shape of the
-design. So things will change, but *your input is important*: we need your use
-cases so that the design serves the real needs of people dealing with data.
+**DataSets.jl is in early development!** We're still figuring out the basic
+shape of the design. So things will change, but *your input is important*: we
+need your use cases so that the design serves the real needs of people dealing
+with data.
 
 # Design
 
-Here's the rough shape of the design which is being considered.
-
 ## What is a DataSet?
 
-A `DataSet` is lightweight declarative metadata describing "any" data store in
-enough detail to store and load from it, and otherwise know about it.
+In this library, a `DataSet` is lightweight declarative metadata describing
+"any" data in enough detail to store and load from it and to reflect it into
+the user's program.
 
 Which types of metadata go in a DataSet declaration? The design principle here
-is to describe *what* the data is, but not *how* to open it. This is desirable
-because several modules with different design tradeoffs may open the same data
-set. Yet, it should be possible to share metadata between these. To sharpen the
-distinction of what vs how, imagine using `DataSet` metadata from a language
-other than Julia. If this makes no sense, perhaps it is *how* rather than
-*what*.
+is to describe *what* and *where* the data is, but not *how* to open it. This
+is desirable because several modules with different design tradeoffs may open
+the same data.  Yet, it should be possible to share metadata between these. To
+sharpen the distinction of what vs how, imagine using `DataSet` metadata from a
+language other than Julia. If this makes no sense, perhaps it is *how* rather
+than *what*.
 
-As examples of the kinds of things we need to describe data, we have:
+There's two primary things we need to know about data:
 
-*Storage backend* and location. Examples:
-* Filesystem, S3, Git server
+### Data set type and encoding
+
+Data exists outside your program in many formats. We can reflect this into the
+program as a particular data structure with a particular Julia type, but
+there's rarely a unique mapping. Therefore, we should have some concept of
+*data set type* which is independent from the types used in a Julia program.
+Here we'll use the made up word **dtype** to avoid confusion with Julia's
+builtin `DataType`.
+
+As an example of this non-uniqueness, consider the humble blob — a 1D array of
+bytes; the *content* of an operating system file. This data resource can be
+reflected into a Julia program in many ways:
+
+* As an `IO` object; concretely `IOStream` as you'd get from a call to `open()`.
+* As an array of bytes; concretely `Vector{UInt8}`, as you might get from a
+  call to `mmap()`.
+* As a `String` as you'd get from a call to `read(filename, String)`.
+* As a path object of some kind, for example, `FilePathsBase.PosixPath`.
+
+Which of these is most appropriate depends on context and must be expressed in
+the program code.
+
+Conversely, the program may want to abstract over dtype, accessing many
+different dtypes through a common Julia type. For example, consider the problem
+of loading images files. There's hundreds of image formats in existence and it
+can be useful to map these into a single image data type for manipulation on
+the Julia side. So we could have dtype of JPEG, PNG and TIFF but on the Julia
+side load all these as `Matrix{<:RGB}`.
+
+Sometimes data isn't self describing enough to decode it without extra context
+so we may need to include information about **data encoding**.  A prime
+example of this is the [many flavous of
+CSV](https://juliadata.github.io/CSV.jl/stable/#CSV.File).
+
+### Data storage drivers and resource locations
+
+Data may be accessed via many different mechanisms. Each DataSet needs to
+specify the *storage driver* to allow for this. Some examples:
+* The local filesystem
+* HTTP
+* A git server
+* Cloud storage like Amazon S3 and Google Drive
 * Research data management servers
 * Relational databases
 
-*Data format* and encoding. Examples:
-* filesystem tree, zip, tar, HDF5
-* csv (including metadata to disambiguate the [many flavous of CSV](https://juliadata.github.io/CSV.jl/stable/#CSV.File))
-* image encodings; jpeg, png, tiff, ...
-* JLD / JLD2
-* zlib, bzip2, lz4, xz, ...
+To create a connection to the storage and access data we need configuration
+such as
+* *resource location*, for example the path to a file on disk
+* *version information* for drivers which support data versioning
+* *caching strategy* for remote or changing data sources
 
-Also many other things should be included, for example
-* default name
-* description
-* version constraints
-* cachability
-* unique identifier
-* ...
+### Other metadata
+
+There's other fields which could be included, for example
+* *unique identifier* to manage identity in settings where the same data
+  resides on multiple storage systems
+* A *default name* for easy linking to the data project
+* A *description* containing freeform text, used to document the
+  data and as content for search systems.
+
+## Connecting data with code
+
+Having a truly useful layer for connecting data with code is surprisingly
+subtle. This is likely due to the many-to-many relationship between dtype vs
+DataType, as elaborated above.
+
+On the one hand, the user's code should declare which Julia types (or type
+traits?) it's willing to consume. On the other hand, the data should declare
+which dtype it consists of. Somehow we need to arrange dispatch so that two
+type systems can meet.
 
 ## Data Projects
 
@@ -73,11 +124,11 @@ Maintaince of the data project should occur via a data REPL.
 
 ## Data Registries
 
-For people who'd like to share curated datasets publically, we should have the
+For people who'd like to share curated datasets publicly, we should have the
 concept of a data registry.
 
-We propose that the normal package system would be a reasonable way to do this;
-we have some precedent here in packages like RDatasets, VegaDatasets,
+The normal package system could be a reasonable way to do this to start with.
+We have some precedent here in packages like RDatasets, VegaDatasets,
 GeoDatasets, etc.
 
 The idea would be for the package to distribute the Data.toml metadata and any
@@ -134,9 +185,6 @@ open(dataset("some_git_tree"), write=true) do git_tree
     end
 end
 ```
-
-This kind of thing already works in the prototype code - look at
-`DataSets.GitTreeRoot`.
 
 There's at least two quite different use patterns for versioning:
 * Batch update: the entire dataset is rewritten. A bit like
