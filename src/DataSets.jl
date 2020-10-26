@@ -30,7 +30,11 @@ The data in a `DataSet` has a type which implies an index; the index can be
 used to partition the data for processing.
 """
 struct DataSet
+    # For now, the representation `conf` contains data read directly from the
+    # TOML. Once the design has settled we might get some explicit fields and
+    # do validation.
     conf
+
     #=
     default_name::String # Default name for convenience.
                          # The binding to an actual name is managed by the data
@@ -55,10 +59,22 @@ struct DataSet
     =#
 end
 
+function _check_keys(toml, context, keys)
+    missed_keys = filter(k->!haskey(toml, k), keys)
+    if !isempty(missed_keys)
+        @info toml
+        error("""
+              Missing expected keys:
+              $missed_keys
+
+              In TOML fragment:
+              $(sprint(TOML.print,toml))
+              """)
+    end
+end
+
 function read_toml(::Type{DataSet}, toml)
-    @assert haskey(toml, "uuid") &&
-            haskey(toml, "storage") &&
-            haskey(toml, "default_name")
+    _check_keys(toml, DataSet, ["uuid", "storage", "default_name"])
     DataSet(toml)
 end
 
