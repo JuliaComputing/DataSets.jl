@@ -175,20 +175,12 @@ include("FileTree.jl")
 
 #-------------------------------------------------------------------------------
 
-"""
-    connect(f, driver, config)
-
-Connect to data storage driver to get a connection `conn` and run `f(conn)`.
-"""
-function connect
-end
-
 _drivers = Dict{String,Any}()
 
 function Base.open(f::Function, as_type, conf::DataSet)
     storage_config = conf.storage
     driver = _drivers[storage_config["driver"]]
-    connect(driver, storage_config) do storage
+    driver(storage_config) do storage
         open(f, as_type, storage)
     end
 end
@@ -206,11 +198,6 @@ Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
 
 #--------------------------------------------------
 
-struct FileSystemDriver
-end
-
-push!(_drivers, "FileSystem"=>FileSystemDriver())
-
 struct FileSystemFile
     path::String
 end
@@ -219,7 +206,7 @@ struct FileSystemDir
     path::String
 end
 
-function connect(f, driver::FileSystemDriver, config)
+function connect_filesystem(f, config)
     path = config["path"]
     type = config["type"]
     if type == "Blob"
@@ -231,6 +218,7 @@ function connect(f, driver::FileSystemDriver, config)
     end
     f(storage)
 end
+_drivers["FileSystem"] = connect_filesystem
 
 function Base.open(f::Function, ::Type{FileTree}, dir::FileSystemDir)
     f(FileTree(FileTreeRoot(dir.path)))
