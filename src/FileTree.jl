@@ -9,6 +9,8 @@
 # * Zip  flattend directory(?) blobs
 #
 
+import AbstractTrees: AbstractTrees, children
+
 #-------------------------------------------------------------------------------
 abstract type AbstractFileTree; end
 
@@ -18,35 +20,77 @@ abstract type AbstractFileTree; end
 Base.isdir(x::AbstractFileTree) = true
 Base.isfile(tree::AbstractFileTree) = false
 
+# Number of children is not known without a (potentially high-latency) call to
+# an external resource
+Base.IteratorSize(tree::AbstractFileTree) = Base.SizeUnknown()
+
+function Base.iterate(tree::AbstractFileTree, state=nothing)
+    if state == nothing
+        # By default, call `children(tree)` to eagerly get a list of children
+        # for iteration.
+        cs = children(tree)
+        itr = iterate(cs)
+    else
+        (cs, cstate) = state
+        itr = iterate(cs, cstate)
+    end
+    if itr == nothing
+        return nothing
+    else
+        (c, cstate) = itr
+        (c, (cs, cstate))
+    end
+end
+
+"""
+    children(tree::AbstractFileTree)
+
+Return an array of the children of `tree`. A child `x` may abstractly either be
+another tree (`children(x)` returns a collection) or a file, where `children(x)`
+returns `()`.
+
+Note that this is subtly different from `readdir(path)` which returns relative
+paths, or `readdir(path, join=true)` which returns absolute paths.
+"""
+function children(tree::AbstractFileTree)
+    # TODO: Is dispatch to the root a correct default?
+    children(tree.root, tree.path)
+end
+
+
 """
     showtree([io,], tree)
 
 Pretty printing of file trees, in the spirit of the unix `tree` utility.
 """
-function showtree(io::IO, tree::AbstractFileTree)
+function showtree(io::IO, tree::AbstractFileTree; maxdepth=5)
     println(io, "📂 ", tree)
-    _showtree(io, tree, "")
+    _showtree(io, tree, "", maxdepth)
 end
 
-struct ShowTree
+struct ShownTree
     tree
 end
 # Use a wrapper rather than defaulting to stdout so that this works in more
 # functional environments such as Pluto.jl
-showtree(tree::AbstractFileTree) = ShowTree(tree)
+showtree(tree::AbstractFileTree) = ShownTree(tree)
 
-Base.show(io::IO, s::ShowTree) = showtree(io, s.tree)
+Base.show(io::IO, s::ShownTree) = showtree(io, s.tree)
 
-function _showtree(io::IO, tree::AbstractFileTree, prefix)
-    children = collect(tree)
-    for (i,x) in enumerate(children)
-        islast = i == lastindex(children) # Ugh! We should be able to avoid the collect...
+function _showtree(io::IO, tree::AbstractFileTree, prefix, depth)
+    cs = children(tree)
+    for (i,x) in enumerate(cs)
+        islast = i == lastindex(cs) # TODO: won't work if children() is lazy
         first_prefix = prefix * (islast ? "└──" : "├──")
         other_prefix = prefix * (islast ? "   " : "│  ")
         if isdir(x)
             print(io, first_prefix, "📂 ")
             printstyled(io, basename(x), "\n", color=:light_blue, bold=true)
-            _showtree(io, x, other_prefix)
+            if depth > 1
+                _showtree(io, x, other_prefix, depth-1)
+            else
+                print(io, other_prefix, '⋮')
+            end
         else
             println(io, first_prefix, " ", basename(x))
         end
@@ -69,10 +113,11 @@ function Base.copy!(dst::AbstractFileTree, src::AbstractFileTree)
     end
 end
 
+#-------------------------------------------------------------------------------
+
 # _joinpath generates and joins OS-specific _local filesystem paths_ from logical paths.
 _joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
 
-#-------------------------------------------------------------------------------
 struct FileTreeRoot
     path::String
     file_opener
@@ -109,6 +154,10 @@ function Base.show(io::IO, ::MIME"text/plain", file::File)
     print(io, "📄 ", file.path, " @ ", _abspath(file.root))
 end
 
+function AbstractTrees.printnode(io::IO, tree::File)
+    print(io, "📄 ",  basename(tree))
+end
+
 #-------------------------------------------------------------------------------
 struct FileTree{Root} <: AbstractFileTree
     root::Root
@@ -118,12 +167,21 @@ end
 FileTree(root) = FileTree(root, RelPath())
 Base.close(root::AbstractFileTree) = close(tree.root)
 
+function AbstractTrees.printnode(io::IO, tree::FileTree)
+    print(io, "📂 ",  basename(tree))
+end
+
 function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
-    children = collect(tree)
+    # TODO: Ideally we'd use
+    # AbstractTrees.print_tree(io, tree, 1)
+    # However, this is hard to use efficiently; we'd need to implement a lazy
+    # `children()` for all our trees. It'd be much easier if
+    # `AbstractTrees.has_children()` was used consistently upstream.
+    cs = children(tree)
     println(io, "📂 Tree ", tree.path, " @ ", tree.root)
-    for (i, c) in enumerate(children)
+    for (i, c) in enumerate(cs)
         print(io, " ", isdir(c) ? '📁' : '📄', " ", basename(c))
-        if i != length(children)
+        if i != length(cs)
             print(io, '\n')
         end
     end
@@ -159,21 +217,10 @@ function Base.haskey(tree::FileTree{FileTreeRoot}, name::AbstractString)
     ispath(_abspath(joinpath(tree,name)))
 end
 
-Base.IteratorSize(tree::FileTree) = Base.SizeUnknown()
-function Base.iterate(tree::FileTree, state=nothing)
-    if state == nothing
-        children = readdir(_abspath(tree))
-        itr = iterate(children)
-    else
-        (children, cstate) = state
-        itr = iterate(children, cstate)
-    end
-    if itr == nothing
-        return nothing
-    else
-        (name, cstate) = itr
-        (tree[name], (children, cstate))
-    end
+function children(tree::FileTree{FileTreeRoot})
+    fs_path = _abspath(tree)
+    child_names = readdir(fs_path)
+    [tree[c] for c in child_names]
 end
 
 function Base.joinpath(tree::FileTree, r::RelPath)
