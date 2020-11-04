@@ -97,3 +97,6 @@ function Base.show(io::IO, ::MIME"text/plain", path::AbsPath)
     print(io, "AbsPath ", path.path, " @ ", path.root)
 end
 
+Base.mkdir(p::AbsPath; kws...) = mkdir(p.root, p.path; kws...)
+Base.rm(p::AbsPath; kws...) = rm(p.root, p.path; kws...)
+

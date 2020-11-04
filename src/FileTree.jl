@@ -114,64 +114,6 @@ function Base.copy!(dst::AbstractFileTree, src::AbstractFileTree)
 end
 
 #-------------------------------------------------------------------------------
-
-# An abstract type for trees which are actually rooted in the file system (in
-# git terminology, there's a "working copy")
-#
-# TODO: Rename AbstractFilesystemRoot ?
-abstract type AbstractFileTreeRoot end
-
-# _joinpath generates and joins OS-specific _local filesystem paths_ from logical paths.
-_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
-_abspath(path::AbsPath) = _abspath(path.root, path.path)
-
-function _abspath(root::AbstractFileTreeRoot, path::RelPath)
-    rootpath = _abspath(root)
-    return isempty(path.components) ? rootpath : joinpath(rootpath, _joinpath(path))
-end
-
-# TODO: would it be better to express the following dispatch in terms of
-# AbsPath{<:AbstractFileTreeRoot} rather than usin double dispatch?
-Base.isdir(root::AbstractFileTreeRoot, path::RelPath) = isdir(_abspath(root, path))
-Base.isfile(root::AbstractFileTreeRoot, path::RelPath) = isfile(_abspath(root, path))
-
-function Base.open(f::Function, root::AbstractFileTreeRoot, path::RelPath;
-                   write=false, read=!write, kws...)
-    if !iswriteable(root) && write
-        error("Error writing file at read-only path $path")
-    end
-    open(f, _abspath(root, path); read=read, write=write, kws...)
-end
-
-function Base.mkdir(root::AbstractFileTreeRoot, path::RelPath; kws...)
-    if !iswriteable(root)
-        error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
-    end
-    mkdir(_abspath(root, path), args...)
-    return FileTree(root, path)
-end
-
-Base.readdir(root::AbstractFileTreeRoot, path::RelPath) = readdir(_abspath(root, path))
-
-struct FileTreeRoot <: AbstractFileTreeRoot
-    path::String
-    read::Bool
-    write::Bool
-end
-
-function FileTreeRoot(path::AbstractString; write=false, read=true)
-    path = abspath(path)
-    if !isdir(path)
-        throw(ArgumentError("$(repr(path)) must be a directory"))
-    end
-    FileTreeRoot(path, read, write)
-end
-
-iswriteable(root::FileTreeRoot) = root.write
-
-_abspath(root::FileTreeRoot) = root.path
-
-#-------------------------------------------------------------------------------
 struct File{Root}
     root::Root
     path::RelPath
@@ -245,6 +187,10 @@ function Base.getindex(tree::FileTree, name::AbstractString)
     getindex(tree, joinpath(RelPath(), name))
 end
 
+# We've got a weird mishmash of path vs tree handling here.
+# TODO: Can we refactor this to cleanly separate the filesystem commands (which
+# take abstract paths?) from FileTree and File which act as an abstraction over
+# the filesystem or other storage mechanisms?
 function Base.joinpath(tree::FileTree, r::RelPath)
     AbsPath(tree.root, joinpath(tree.path, r))
 end
@@ -261,6 +207,10 @@ function Base.readdir(tree::FileTree)
     readdir(tree.root, tree.path)
 end
 
+function Base.rm(tree::FileTree; kws...)
+    rm(tree.root, tree.path; kws...)
+end
+
 function children(tree::FileTree)
     child_names = readdir(tree)
     [tree[c] for c in child_names]
@@ -269,12 +219,72 @@ end
 Base.open(f::Function, file::File; kws...) = open(f, file.root, file.path; kws...)
 Base.open(f::Function, path::AbsPath; kws...) = open(f, path.root, path.path; kws...)
 
-Base.mkdir(p::AbsPath; kws...) = mkdir(p.root, p.path; kws...)
+#-------------------------------------------------------------------------------
 
+# Implementation for trees which are actually rooted in the file system (in git
+# terminology, there exists a "working copy")
+abstract type AbstractFilesystemRoot end
+
+# These underscore functions _abspath and _joinpath generate/joins OS-specific
+# _local filesystem paths_ out of logical paths. They should be defined only
+# for trees which are rooted in the actual filesystem.
+function _abspath(root::AbstractFilesystemRoot, path::RelPath)
+    rootpath = _abspath(root)
+    return isempty(path.components) ? rootpath : joinpath(rootpath, _joinpath(path))
+end
+
+_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
+_abspath(path::AbsPath) = _abspath(path.root, path.path)
+_abspath(tree::FileTree) = _abspath(tree.root, tree.path)
+
+# TODO: would it be better to express the following dispatch in terms of
+# AbsPath{<:AbstractFilesystemRoot} rather than usin double dispatch?
+Base.isdir(root::AbstractFilesystemRoot, path::RelPath) = isdir(_abspath(root, path))
+Base.isfile(root::AbstractFilesystemRoot, path::RelPath) = isfile(_abspath(root, path))
+
+function Base.open(f::Function, root::AbstractFilesystemRoot, path::RelPath;
+                   write=false, read=!write, kws...)
+    if !iswriteable(root) && write
+        error("Error writing file at read-only path $path")
+    end
+    open(f, _abspath(root, path); read=read, write=write, kws...)
+end
+
+function Base.mkdir(root::AbstractFilesystemRoot, path::RelPath; kws...)
+    if !iswriteable(root)
+        error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
+    end
+    mkdir(_abspath(root, path), args...)
+    return FileTree(root, path)
+end
+
+function Base.rm(root::AbstractFilesystemRoot, path::RelPath; kws...)
+    rm(_abspath(root,path); kws...)
+end
+
+Base.readdir(root::AbstractFilesystemRoot, path::RelPath) = readdir(_abspath(root, path))
+
+struct FileTreeRoot <: AbstractFilesystemRoot
+    path::String
+    read::Bool
+    write::Bool
+end
+
+function FileTreeRoot(path::AbstractString; write=false, read=true)
+    path = abspath(path)
+    if !isdir(path)
+        throw(ArgumentError("$(repr(path)) must be a directory"))
+    end
+    FileTreeRoot(path, read, write)
+end
+
+iswriteable(root::FileTreeRoot) = root.write
+
+_abspath(root::FileTreeRoot) = root.path
 
 #--------------------------------------------------
-# Almost-functional interface for creating file trees
-mutable struct TempFilesystemRoot <: AbstractFileTreeRoot
+# A more functional interface for creating file trees
+mutable struct TempFilesystemRoot <: AbstractFilesystemRoot
     path::String
     isdir::Bool
     istemp::Bool
@@ -282,7 +292,7 @@ mutable struct TempFilesystemRoot <: AbstractFileTreeRoot
         root = new(path, isdir, istemp)
         finalizer(root) do r
             if r.istemp
-                rm(r.path, recursive=r.isdir)
+                rm(r.path, recursive=r.isdir, force=true)
             end
         end
         return root
@@ -292,14 +302,14 @@ end
 iswriteable(root::TempFilesystemRoot) = true
 _abspath(root::TempFilesystemRoot) = root.path
 
-function newdir(ctx::AbstractFileTreeRoot=FileTreeRoot(tempdir(), write=true))
+function newdir(ctx::AbstractFilesystemRoot=FileTreeRoot(tempdir(), write=true))
     # cleanup=false: we manage our own cleanup via the finalizer
     path = mktempdir(_abspath(ctx), cleanup=false)
     return FileTree(TempFilesystemRoot(path, true))
 end
 newdir(ctx::FileTree) = newdir(ctx.root)
 
-function newfile(ctx::AbstractFileTreeRoot=FileTreeRoot(tempdir(), write=true))
+function newfile(ctx::AbstractFilesystemRoot=FileTreeRoot(tempdir(), write=true))
     path, io = mktemp(_abspath(ctx), cleanup=false)
     close(io)
     return File(TempFilesystemRoot(path, false))
@@ -319,18 +329,64 @@ function newfile(f::Function, ctx=FileTreeRoot(tempdir(), write=true))
     return File(TempFilesystemRoot(path, false))
 end
 
-function Base.setindex!(tree::FileTree{<:AbstractFileTreeRoot},
+# Move srcpath to destpath, making all attempts to preserve the original
+# content of `destpath` if anything goes wrong. We assume that `srcpath` is
+# temporary content which doesn't need to be protected.
+function mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
+    holding_area = nothing
+    held_path = nothing
+    if ispath(destpath)
+        # If the destination path exists, improve the atomic nature of the
+        # update by first moving existing data to a temporary directory.
+        holding_area = mktempdir(tempdir_parent, prefix="jl_to_remove_", cleanup=false)
+        name = basename(destpath)
+        held_path = joinpath(holding_area,name)
+        mv(destpath, held_path)
+    end
+    try
+        mv(srcpath, destpath)
+    catch
+        try
+            if !isnothing(holding_area)
+                # Attempt to put things back as they were!
+                mv(held_path, destpath)
+            end
+        catch
+            # At this point we've tried our best to preserve the user's data
+            # but something has gone wrong, likely at the OS level. The user
+            # will have to clean up manually if possible.
+            error("""
+                  Something when wrong while moving data to path $destpath.
+
+                  We tried restoring the original data to $destpath, but were
+                  met with another error. The original data is preserved in
+                  $held_path
+
+                  See the catch stack for the root cause.
+                  """)
+        end
+        rethrow()
+    end
+    if !isnothing(holding_area)
+        # If we get to here, it's safe to remove the holding area
+        rm(holding_area, recursive=true)
+    end
+end
+
+function Base.setindex!(tree::FileTree{<:AbstractFilesystemRoot},
                         value::Union{File{TempFilesystemRoot},FileTree{TempFilesystemRoot}},
                         name::AbstractString)
     if !iswriteable(tree.root)
         error("Attempt to move to a read-only tree $tree")
     end
     if !value.root.istemp
-        type = value.root.isdir ? "directory" : "file"
+        type = isdir(value) ? "directory" : "file"
         error("Attempted to root a temporary $type twice: $value")
     end
     destpath = _abspath(joinpath(tree, name))
-    mv(_abspath(abspath(value)), destpath, force=true)
+    srcpath = _abspath(value)
+    tempdir_parent = _abspath(tree)
+    mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
     value.root.path = destpath
     value.root.istemp = false
     return tree
