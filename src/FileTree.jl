@@ -115,12 +115,46 @@ end
 
 #-------------------------------------------------------------------------------
 
+# An abstract type for trees which are actually rooted in the file system (in
+# git terminology, there's a "working copy")
+#
+# TODO: Rename AbstractFilesystemRoot ?
+abstract type AbstractFileTreeRoot end
+
 # _joinpath generates and joins OS-specific _local filesystem paths_ from logical paths.
 _joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
+_abspath(path::AbsPath) = _abspath(path.root, path.path)
 
-struct FileTreeRoot
+function _abspath(root::AbstractFileTreeRoot, path::RelPath)
+    rootpath = _abspath(root)
+    return isempty(path.components) ? rootpath : joinpath(rootpath, _joinpath(path))
+end
+
+# TODO: would it be better to express the following dispatch in terms of
+# AbsPath{<:AbstractFileTreeRoot} rather than usin double dispatch?
+Base.isdir(root::AbstractFileTreeRoot, path::RelPath) = isdir(_abspath(root, path))
+Base.isfile(root::AbstractFileTreeRoot, path::RelPath) = isfile(_abspath(root, path))
+
+function Base.open(f::Function, root::AbstractFileTreeRoot, path::RelPath;
+                   write=false, read=!write, kws...)
+    if !iswriteable(root) && write
+        error("Error writing file at read-only path $path")
+    end
+    open(f, _abspath(root, path); read=read, write=write, kws...)
+end
+
+function Base.mkdir(root::AbstractFileTreeRoot, path::RelPath; kws...)
+    if !iswriteable(root)
+        error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
+    end
+    mkdir(_abspath(root, path), args...)
+    return FileTree(root, path)
+end
+
+Base.readdir(root::AbstractFileTreeRoot, path::RelPath) = readdir(_abspath(root, path))
+
+struct FileTreeRoot <: AbstractFileTreeRoot
     path::String
-    file_opener
     read::Bool
     write::Bool
 end
@@ -130,14 +164,12 @@ function FileTreeRoot(path::AbstractString; write=false, read=true)
     if !isdir(path)
         throw(ArgumentError("$(repr(path)) must be a directory"))
     end
-    FileTreeRoot(path, open, read, write)
+    FileTreeRoot(path, read, write)
 end
 
-_abspath(root::FileTreeRoot) = root.path
-_abspath(ap::AbsPath{FileTreeRoot}) = joinpath(_abspath(ap.root), _joinpath(ap.path))
+iswriteable(root::FileTreeRoot) = root.write
 
-Base.open(root::FileTreeRoot) = FileTree(root)
-Base.close(root::FileTreeRoot) = nothing
+_abspath(root::FileTreeRoot) = root.path
 
 #-------------------------------------------------------------------------------
 struct File{Root}
@@ -145,8 +177,10 @@ struct File{Root}
     path::RelPath
 end
 
-_abspath(file::File) = joinpath(_abspath(file.root), _joinpath(file.path))
+File(root) = File(root, RelPath())
+
 Base.basename(file::File) = basename(file.path)
+Base.abspath(file::File) = AbsPath(file.root, file.path)
 Base.isdir(file::File) = false
 Base.isfile(file::File) = true
 
@@ -154,8 +188,8 @@ function Base.show(io::IO, ::MIME"text/plain", file::File)
     print(io, "📄 ", file.path, " @ ", _abspath(file.root))
 end
 
-function AbstractTrees.printnode(io::IO, tree::File)
-    print(io, "📄 ",  basename(tree))
+function AbstractTrees.printnode(io::IO, file::File)
+    print(io, "📄 ",  basename(file))
 end
 
 #-------------------------------------------------------------------------------
@@ -165,7 +199,6 @@ struct FileTree{Root} <: AbstractFileTree
 end
 
 FileTree(root) = FileTree(root, RelPath())
-Base.close(root::AbstractFileTree) = close(tree.root)
 
 function AbstractTrees.printnode(io::IO, tree::FileTree)
     print(io, "📂 ",  basename(tree))
@@ -188,8 +221,7 @@ function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
 end
 
 Base.basename(tree::FileTree) = basename(tree.path)
-
-_abspath(tree::FileTree) = joinpath(_abspath(tree.root), _joinpath(tree.path))
+Base.abspath(tree::FileTree) = AbsPath(tree.root, tree.path)
 
 # getindex vs joinpath:
 #  - getindex about indexing the datastrcutre; therefore it looks in the
@@ -197,15 +229,15 @@ _abspath(tree::FileTree) = joinpath(_abspath(tree.root), _joinpath(tree.path))
 #  - joinpath just makes paths, not knowing whether they exist.
 function Base.getindex(tree::FileTree, path::RelPath)
     relpath = joinpath(tree.path, path)
-    absp = joinpath(_abspath(tree.root), _joinpath(relpath))
-    if isdir(absp)
-        FileTree(tree.root, relpath)
-    elseif isfile(absp)
-        File(tree.root, relpath)
-    elseif islink(absp)
-        AbsPath(tree.root, relpath)
+    root = tree.root
+    if isdir(root, relpath)
+        FileTree(root, relpath)
+    elseif isfile(root, relpath)
+        File(root, relpath)
+    elseif ispath(root, relpath)
+        AbsPath(root, relpath) # Not great?
     else
-        error("Path $absp doesn't exist")
+        error("Path $relpath @ $root doesn't exist")
     end
 end
 
@@ -213,18 +245,7 @@ function Base.getindex(tree::FileTree, name::AbstractString)
     getindex(tree, joinpath(RelPath(), name))
 end
 
-function Base.haskey(tree::FileTree{FileTreeRoot}, name::AbstractString)
-    ispath(_abspath(joinpath(tree,name)))
-end
-
-function children(tree::FileTree{FileTreeRoot})
-    fs_path = _abspath(tree)
-    child_names = readdir(fs_path)
-    [tree[c] for c in child_names]
-end
-
 function Base.joinpath(tree::FileTree, r::RelPath)
-    # Should this AbsPath be rooted at `tree` rather than `tree.root`?
     AbsPath(tree.root, joinpath(tree.path, r))
 end
 
@@ -232,33 +253,88 @@ function Base.joinpath(tree::FileTree, s::AbstractString)
     AbsPath(tree.root, joinpath(tree.path, s))
 end
 
-
-# Mutation
-
-function Base.open(func::Function, f::File{FileTreeRoot}; write=false, read=!write)
-    if !f.root.write && write
-        error("Error writing file at read-only path $f")
-    end
-    f.root.file_opener(func, _abspath(f); read=read, write=write)
+function Base.haskey(tree::FileTree, name::AbstractString)
+    ispath(tree.root, joinpath(tree.path, name))
 end
 
-function Base.open(func::Function, p::AbsPath{FileTreeRoot}; write=false, read=!write)
-    if !p.root.write && write
-        error("Error writing file at read-only path $p")
-    end
-    p.root.file_opener(func, _abspath(p); read=read, write=write)
+function Base.readdir(tree::FileTree)
+    readdir(tree.root, tree.path)
 end
 
-function Base.mkdir(p::AbsPath{FileTreeRoot}, args...)
-    if !p.root.write
-        error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
-    end
-    mkdir(_abspath(p), args...)
-    return FileTree(p.root, p.path)
+function children(tree::FileTree)
+    child_names = readdir(tree)
+    [tree[c] for c in child_names]
 end
 
-#function Base.rm(tree::FileTree; recursive=false)
-#end
+Base.open(f::Function, file::File; kws...) = open(f, file.root, file.path; kws...)
+Base.open(f::Function, path::AbsPath; kws...) = open(f, path.root, path.path; kws...)
+
+Base.mkdir(p::AbsPath; kws...) = mkdir(p.root, p.path; kws...)
+
+
+#--------------------------------------------------
+# Almost-functional interface for creating file trees
+mutable struct TempFilesystemRoot <: AbstractFileTreeRoot
+    path::String
+    isdir::Bool
+    istemp::Bool
+    function TempFilesystemRoot(path, isdir, istemp=true)
+        root = new(path, isdir, istemp)
+        finalizer(root) do r
+            if r.istemp
+                rm(r.path, recursive=r.isdir)
+            end
+        end
+        return root
+    end
+end
+
+iswriteable(root::TempFilesystemRoot) = true
+_abspath(root::TempFilesystemRoot) = root.path
+
+function newdir(ctx::AbstractFileTreeRoot=FileTreeRoot(tempdir(), write=true))
+    # cleanup=false: we manage our own cleanup via the finalizer
+    path = mktempdir(_abspath(ctx), cleanup=false)
+    return FileTree(TempFilesystemRoot(path, true))
+end
+newdir(ctx::FileTree) = newdir(ctx.root)
+
+function newfile(ctx::AbstractFileTreeRoot=FileTreeRoot(tempdir(), write=true))
+    path, io = mktemp(_abspath(ctx), cleanup=false)
+    close(io)
+    return File(TempFilesystemRoot(path, false))
+end
+newfile(ctx::FileTree) = newfile(ctx.root)
+
+function newfile(f::Function, ctx=FileTreeRoot(tempdir(), write=true))
+    path, io = mktemp(_abspath(ctx), cleanup=false)
+    try
+        f(io)
+    catch
+        rm(path)
+        rethrow()
+    finally
+        close(io)
+    end
+    return File(TempFilesystemRoot(path, false))
+end
+
+function Base.setindex!(tree::FileTree{<:AbstractFileTreeRoot},
+                        value::Union{File{TempFilesystemRoot},FileTree{TempFilesystemRoot}},
+                        name::AbstractString)
+    if !iswriteable(tree.root)
+        error("Attempt to move to a read-only tree $tree")
+    end
+    if !value.root.istemp
+        type = value.root.isdir ? "directory" : "file"
+        error("Attempted to root a temporary $type twice: $value")
+    end
+    destpath = _abspath(joinpath(tree, name))
+    mv(_abspath(abspath(value)), destpath, force=true)
+    value.root.path = destpath
+    value.root.istemp = false
+    return tree
+end
 
 # It's interesting to read about the linux VFS interface in regards to how the
 # OS actually represents these things. For example

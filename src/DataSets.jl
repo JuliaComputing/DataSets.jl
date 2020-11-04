@@ -6,7 +6,8 @@ using Pkg.TOML
 # using CSV, CodecZlib
 # using HDF5
 
-export DataSet, dataset, FileTree, @datafunc, @datarun
+export DataSet, dataset, @datafunc, @datarun
+export FileTree, newfile, newdir
 
 #-------------------------------------------------------------------------------
 
