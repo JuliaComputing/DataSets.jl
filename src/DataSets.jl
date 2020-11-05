@@ -37,7 +37,7 @@ struct DataSet
     conf
 
     #=
-    default_name::String # Default name for convenience.
+    name::String # Default name for convenience.
                          # The binding to an actual name is managed by the data
                          # project.
     uuid::UUID     # Unique ID for use in distributed settings
@@ -75,7 +75,7 @@ function _check_keys(toml, context, keys)
 end
 
 function read_toml(::Type{DataSet}, toml)
-    _check_keys(toml, DataSet, ["uuid", "storage", "default_name"])
+    _check_keys(toml, DataSet, ["uuid", "storage", "name"])
     DataSet(toml)
 end
 
@@ -89,7 +89,7 @@ function Base.getproperty(d::DataSet, name::Symbol)
 end
 
 function Base.show(io::IO, d::DataSet)
-    print(io, DataSet, " $(d.default_name) $(repr(d.uuid))")
+    print(io, DataSet, " $(d.name) $(repr(d.uuid))")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
@@ -115,11 +115,14 @@ function load_project(filename::AbstractString)
     # Super hacky templating for paths relative to the toml file.
     toml_str = replace(toml_str, "@__DIR__"=>dirname(abspath(filename)))
     toml = TOML.parse(toml_str)
-    available_datasets = Dict(d.uuid=>d for d in read_toml.(DataSet, toml["datasets"]))
+    format_ver = toml["data_toml_version"]
+    if format_ver > 0
+        error("Data toml format version $format_ver is newer than supported")
+    end
     proj = DataProject()
-    for entry in toml["dataproject"]["datasets"]
-        id = entry["uuid"]
-        link_dataset(proj, entry["name"] => available_datasets[id])
+    for data_toml in toml["datasets"]
+        dataset = read_toml(DataSet, data_toml)
+        link_dataset(proj, dataset.name => dataset)
     end
     proj
 end
@@ -128,7 +131,7 @@ function link_dataset(proj::DataProject, (name,data)::Pair)
     proj.datasets[name] = data
 end
 
-link_dataset(proj::DataProject, d::DataSet) = link_dataset(proj, d.default_name=>d)
+link_dataset(proj::DataProject, d::DataSet) = link_dataset(proj, d.name=>d)
 
 function unlink_dataset(proj::DataProject, name::AbstractString)
     if !haskey(proj.datasets, name)

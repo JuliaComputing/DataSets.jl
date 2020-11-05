@@ -1,19 +1,24 @@
+data_toml_version=0
+
 # An example data project
 # First, a list of the names of datasets within the DataProject
 #
 # A bit like Project.toml?
-
-[[dataproject.datasets]]
-name="a_text_file"
-uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
-
-[[dataproject.datasets]]
-name="a_tree_example"
-uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
-
-[[dataproject.datasets]]
-name="a_table"
-uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
+#
+# Commented out for now, for simplicity. Instead, we just use the list of
+# datasets below.
+#
+# [[dataproject.datasets]]
+# name="a_text_file"
+# uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
+#
+# [[dataproject.datasets]]
+# name="a_tree_example"
+# uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
+#
+# [[dataproject.datasets]]
+# name="a_table"
+# uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
 
 #-------------------------------------------------------------------------------
@@ -25,7 +30,7 @@ uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 #--------------------------------------------------
 [[datasets]]
 description="A text file"
-default_name="a_text_file"
+name="a_text_file"
 uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
     [datasets.storage]
@@ -46,7 +51,7 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 #--------------------------------------------------
 [[datasets]]
 description="Gzipped CSV example"
-default_name="a_table"
+name="a_table"
 uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
     [datasets.storage]
@@ -64,7 +69,7 @@ uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
 #--------------------------------------------------
 [[datasets]]
-default_name="tree_example"
+name="a_tree_example"
 uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
     [datasets.storage]
