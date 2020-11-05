@@ -31,7 +31,9 @@ end
 Base.joinpath(path::RelPath, xs::RelPath...) =
     RelPath(vcat(path.components, [x.components for x in xs]...))
 
-Base.basename(path::RelPath) = isempty(path.components) ? "" : last(path.components)
+Base.isempty(p::RelPath) = isempty(p.components)
+
+Base.basename(path::RelPath) = isempty(path) ? "" : last(path.components)
 Base.dirname(path::RelPath) = RelPath(path.components[1:end-1])
 
 Base.print(io::IO, p::RelPath) = print(io, join(p.components, '/'))
@@ -59,7 +61,7 @@ macro path_str(str)
     # For OS-independence, just allow / and \ as equivalent; normalize to '/' when printing.
     # As a side effect, this disallows use of \ in individual *path literal
     # components* on unix. But that would be perverse, right?
-    components = split(str, ('/', '\\'))
+    components = isempty(str) ? [] : split(str, ('/', '\\'))
     RelPath(components)
 end
 

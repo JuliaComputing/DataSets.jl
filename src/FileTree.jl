@@ -236,6 +236,7 @@ end
 _joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
 _abspath(path::AbsPath) = _abspath(path.root, path.path)
 _abspath(tree::FileTree) = _abspath(tree.root, tree.path)
+_abspath(file::File) = _abspath(file.root, file.path)
 
 # TODO: would it be better to express the following dispatch in terms of
 # AbsPath{<:AbstractFilesystemRoot} rather than usin double dispatch?
@@ -282,21 +283,26 @@ iswriteable(root::FileTreeRoot) = root.write
 
 _abspath(root::FileTreeRoot) = root.path
 
+
 #--------------------------------------------------
-# A more functional interface for creating file trees
+# Infrastructure for a somewhat more functional interface for creating file
+# trees than the fully mutable version we usually use.
+
 mutable struct TempFilesystemRoot <: AbstractFilesystemRoot
-    path::String
-    isdir::Bool
-    istemp::Bool
-    function TempFilesystemRoot(path, isdir, istemp=true)
-        root = new(path, isdir, istemp)
+    path::Union{Nothing,String}
+    function TempFilesystemRoot(path)
+        root = new(path)
         finalizer(root) do r
-            if r.istemp
-                rm(r.path, recursive=r.isdir, force=true)
+            if !isnothing(r.path)
+                rm(r.path, recursive=true, force=true)
             end
         end
         return root
     end
+end
+
+function Base.readdir(root::TempFilesystemRoot, path::RelPath)
+    return isnothing(root.path) ? [] : readdir(_abspath(root, path))
 end
 
 iswriteable(root::TempFilesystemRoot) = true
@@ -305,14 +311,14 @@ _abspath(root::TempFilesystemRoot) = root.path
 function newdir(ctx::AbstractFilesystemRoot=FileTreeRoot(tempdir(), write=true))
     # cleanup=false: we manage our own cleanup via the finalizer
     path = mktempdir(_abspath(ctx), cleanup=false)
-    return FileTree(TempFilesystemRoot(path, true))
+    return FileTree(TempFilesystemRoot(path))
 end
 newdir(ctx::FileTree) = newdir(ctx.root)
 
 function newfile(ctx::AbstractFilesystemRoot=FileTreeRoot(tempdir(), write=true))
     path, io = mktemp(_abspath(ctx), cleanup=false)
     close(io)
-    return File(TempFilesystemRoot(path, false))
+    return File(TempFilesystemRoot(path))
 end
 newfile(ctx::FileTree) = newfile(ctx.root)
 
@@ -326,7 +332,7 @@ function newfile(f::Function, ctx=FileTreeRoot(tempdir(), write=true))
     finally
         close(io)
     end
-    return File(TempFilesystemRoot(path, false))
+    return File(TempFilesystemRoot(path))
 end
 
 # Move srcpath to destpath, making all attempts to preserve the original
@@ -374,21 +380,27 @@ function mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
 end
 
 function Base.setindex!(tree::FileTree{<:AbstractFilesystemRoot},
-                        value::Union{File{TempFilesystemRoot},FileTree{TempFilesystemRoot}},
+                        tmpdata::Union{File{TempFilesystemRoot},FileTree{TempFilesystemRoot}},
                         name::AbstractString)
     if !iswriteable(tree.root)
         error("Attempt to move to a read-only tree $tree")
     end
-    if !value.root.istemp
-        type = isdir(value) ? "directory" : "file"
-        error("Attempted to root a temporary $type twice: $value")
+    if isnothing(tmpdata.root.path)
+        type = isdir(tmpdata) ? "directory" : "file"
+        error("Attempted to root a temporary $type which has already been moved to $(tree.path)/$name ")
+    end
+    if !isempty(tree.path)
+        # Eh, the number of ways the user can misuse this isn't really funny :-/
+        error("Temporary trees must be moved in full. The tree had non-empty path $(tree.path)")
     end
     destpath = _abspath(joinpath(tree, name))
-    srcpath = _abspath(value)
+    srcpath = _abspath(tmpdata)
     tempdir_parent = _abspath(tree)
     mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
-    value.root.path = destpath
-    value.root.istemp = false
+    # Transfer ownership of the data to `tree`. This is ugly to be sure, as it
+    # leaves `tmpdata` empty! However, we'll have to live with this wart unless
+    # we want to be duplicating large amounts of data on disk.
+    tmpdata.root.path = nothing
     return tree
 end
 
