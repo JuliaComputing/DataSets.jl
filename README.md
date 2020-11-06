@@ -18,4 +18,5 @@ to make it easy to *relocate* an algorithm between different data environments
 without code changes. For example from your laptop to the cloud, to another
 user's machine, or to an HPC system.
 
-See [**the documentation]() for information.
+Read [**the documentation](https://juliacomputing.github.io/DataSets.jl/dev/)
+for more information.
