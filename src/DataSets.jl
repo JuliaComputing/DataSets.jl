@@ -36,6 +36,12 @@ struct DataSet
     # do validation.
     conf
 
+    function DataSet(conf)
+        _check_keys(conf, DataSet, ["uuid", "storage", "name"])
+        check_dataset_name(conf["name"])
+        new(conf)
+    end
+
     #=
     name::String # Default name for convenience.
                          # The binding to an actual name is managed by the data
@@ -74,8 +80,15 @@ function _check_keys(toml, context, keys)
     end
 end
 
+function check_dataset_name(name::AbstractString)
+    # Disallow punctuation in DataSet names for now, as it may be needed as
+    # delimiters in data-related syntax (eg, for the data REPL).
+    if !occursin(r"^[[:alnum:]_ ]*$", name)
+        error("DataSet name is only allowed to contain letters, numbers, spaces or underscores; got \"$name\"")
+    end
+end
+
 function read_toml(::Type{DataSet}, toml)
-    _check_keys(toml, DataSet, ["uuid", "storage", "name"])
     DataSet(toml)
 end
 

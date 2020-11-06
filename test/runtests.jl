@@ -27,6 +27,15 @@ proj = DataSets.load_project("Data.toml")
     @test read_data == (x_data="Some text file!\n",)
 end
 
+#-------------------------------------------------------------------------------
+@testset "Data set parsing" begin
+    @test DataSets.check_dataset_name("a_b") === nothing
+    @test DataSets.check_dataset_name("a b") === nothing
+    @test DataSets.check_dataset_name("δεδομένα") === nothing
+    @test_throws ErrorException("DataSet name is only allowed to contain letters, numbers, spaces or underscores; got \"a/b\"") DataSets.check_dataset_name("a/b")
+    @test_throws ErrorException DataSets.check_dataset_name("a.b")
+    @test_throws ErrorException DataSets.check_dataset_name("a:b")
+end
 
 #-------------------------------------------------------------------------------
 # Trees
