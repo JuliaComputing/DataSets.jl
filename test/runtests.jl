@@ -6,7 +6,9 @@ using Test
 read_data = nothing
 
 @datafunc function main1(x::Blob=>String, t::Tree=>FileTree)
-    csv_data = open(io->read(io,String), t["1.csv"])
+    csv_data = open(IO, t["1.csv"]) do io
+        read(io,String)
+    end
     global read_data = (x_string=x, csv_data=csv_data)
 end
 
@@ -54,7 +56,7 @@ end
     for j=1:3
         temptree["d$j"] = write_dir(j)
     end
-    @test open(io->read(io,String), temptree["d1"]["hi_2.txt"]) == "hi 1 2\n"
-    @test open(io->read(io,String), temptree["d3"]["hi_1.txt"]) == "hi 3 1\n"
+    @test open(io->read(io,String), IO, temptree["d1"]["hi_2.txt"]) == "hi 1 2\n"
+    @test open(io->read(io,String), IO, temptree["d3"]["hi_1.txt"]) == "hi 3 1\n"
     @test isfile(DataSets._abspath(temptree["d1"]["hi_2.txt"]))
 end

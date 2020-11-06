@@ -191,6 +191,7 @@ include("FileTree.jl")
 # include("repl.jl")
 
 #-------------------------------------------------------------------------------
+# Storage layer and interface
 
 _drivers = Dict{String,Any}()
 
@@ -202,6 +203,8 @@ function Base.open(f::Function, as_type, conf::DataSet)
     end
 end
 
+include("filesystem.jl")
+
 # For convenience, this somewhat dodgy function just returns the data handle as
 # opened.
 #
@@ -212,46 +215,6 @@ end
 # this function returns.  TODO: Have some trait or something which can
 # determine whether this is safe.
 Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
-
-#--------------------------------------------------
-
-struct FileSystemFile
-    path::String
-end
-
-struct FileSystemDir
-    path::String
-end
-
-function connect_filesystem(f, config)
-    path = config["path"]
-    type = config["type"]
-    if type == "Blob"
-        isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
-        storage = FileSystemFile(path)
-    elseif type == "Tree"
-        isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
-        storage = FileSystemDir(path)
-    end
-    f(storage)
-end
-_drivers["FileSystem"] = connect_filesystem
-
-function Base.open(f::Function, ::Type{FileTree}, dir::FileSystemDir)
-    f(FileTree(FileTreeRoot(dir.path)))
-end
-
-function Base.open(f::Function, ::Type{IO}, file::FileSystemFile)
-    # TODO writeable files
-    open(f, file.path; read=true, write=false)
-end
-
-function Base.open(f::Function, ::Type{String}, file::FileSystemFile)
-    open(IO, file) do io
-        f(read(io, String))
-    end
-end
-
 
 #-------------------------------------------------------------------------------
 # Entry point utilities
@@ -348,6 +311,7 @@ When loaded into Julia, this may be represented as a
 """
 function dataset_type(d::DataSet)
     # TODO: Enhance this once maps can be applied on top of the storage layer
+    # Should we use MIME type? What about layering?
     d.storage["type"]
 end
 
