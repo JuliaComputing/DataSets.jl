@@ -83,10 +83,16 @@ julia> open(FileTree, dataset(project, "a_tree_example"))
 
 ## Program Entry Points
 
-Data needs to be mapped into your program in a way that the data types declared
-within Data.toml match up with some types in your program. Rather than using
-the `open()` functions as shown above, the `@datafunc` macro lets you do all
-this in one step. You declare
+Rather than manually using the `open()` functions as shown above, the
+`@datafunc` macro lets you define entry points where `DataSet`s will be mapped
+into your program.
+
+For example, here we define an entry point called `main` which takes
+* DataSet type `Blob`, presenting it as a `String` within the program
+* DataSet type `Tree`, presenting it as a `FileTree` within the program
+
+The `@datarun` macro allows you to call such program entry points, extracting
+named data sets from a given project.
 
 ```jldoctest
 julia> @datafunc function main(x::Blob=>String, t::Tree=>FileTree)
