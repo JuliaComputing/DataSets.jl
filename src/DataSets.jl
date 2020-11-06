@@ -123,10 +123,17 @@ end
 
 DataProject() = DataProject(Dict{String,DataSet}())
 
-function load_project(filename::AbstractString)
-    toml_str = read(filename, String)
+function _fill_template(toml_path, toml_str)
     # Super hacky templating for paths relative to the toml file.
-    toml_str = replace(toml_str, "@__DIR__"=>dirname(abspath(filename)))
+    # We really should have something a lot nicer here...
+    if Sys.iswindows()
+        toml_path = replace(toml_path, '\\'=>'/')
+    end
+    toml_str = replace(toml_str, "@__DIR__"=>toml_path)
+end
+
+function load_project(filename::AbstractString)
+    toml_str = _fill_template(dirname(abspath(filename)), read(filename, String))
     toml = TOML.parse(toml_str)
     format_ver = toml["data_toml_version"]
     if format_ver > 0

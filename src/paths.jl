@@ -57,6 +57,9 @@ function Base.isless(p1::RelPath, p2::RelPath)
     return length(p1.components) < length(p2.components)
 end
 
+"""
+    A tool to write relative path literals succinctly
+"""
 macro path_str(str)
     # For OS-independence, just allow / and \ as equivalent; normalize to '/' when printing.
     # As a side effect, this disallows use of \ in individual *path literal
@@ -64,23 +67,6 @@ macro path_str(str)
     components = isempty(str) ? [] : split(str, ('/', '\\'))
     RelPath(components)
 end
-
-#=
-"""
-    A tool to write relative path literals succinctly
-"""
-macro path_str(str)
-    # FIXME: This is system-independent which is good, but root paths can be
-    # truly weird, especially on windows, so this split may not make sense.
-    components = Vector{Any}(split(str, '/'))
-    for i in eachindex(components)
-        if startswith(components[i], '$')
-            components[i] = esc(Symbol(components[i][2:end]))
-        end
-    end
-    :(joinpath($(components...)))
-end
-=#
 
 #-------------------------------------------------------------------------------
 """
