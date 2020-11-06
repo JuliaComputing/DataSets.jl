@@ -7,7 +7,7 @@ using Pkg.TOML
 # using HDF5
 
 export DataSet, dataset, @datafunc, @datarun
-export FileTree, newfile, newdir
+export File, FileTree, newfile, newdir
 
 #-------------------------------------------------------------------------------
 

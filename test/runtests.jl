@@ -22,11 +22,11 @@ proj = DataSets.load_project("Data.toml")
 @testset "@datafunc and @datarun" begin
     @datarun proj main1("a_text_file", "a_tree_example")
 
-    @test read_data == (x_string="Some text file!\n",
+    @test read_data == (x_string="Hello world!\n",
                         csv_data="Name,Age\n\"Aaron\",23\n\"Harry\",42\n")
 
     @datarun proj main1("a_text_file")
-    @test read_data == (x_data="Some text file!\n",)
+    @test read_data == (x_data="Hello world!\n",)
 end
 
 #-------------------------------------------------------------------------------

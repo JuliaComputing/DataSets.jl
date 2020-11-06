@@ -235,3 +235,4 @@ function Base.open(f::Function, ::Type{FileTree}, tree::FileTree)
     f(tree)
 end
 
+# Base.open(::Type{T}, file::File; kws...) where {T} = open(identity, T, file.root, file.path; kws...)
