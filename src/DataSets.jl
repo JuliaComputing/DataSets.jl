@@ -212,16 +212,37 @@ end
 
 include("filesystem.jl")
 
-# For convenience, this somewhat dodgy function just returns the data handle as
-# opened.
-#
-# If that's a data structure which is fully loaded into memory this is ok and
-# super handy!
-#
-# But if not, the underlying data connection will have been closed by the time
-# this function returns.  TODO: Have some trait or something which can
-# determine whether this is safe.
+# For convenience, this non-scoped open() just returns the data handle as
+# opened. See check_scoped_open for a way to help users avoid errors when using
+# this (ie, if `identity` is not a valid argument to open() because resources
+# would be closed before it returns).
 Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
+
+"""
+    check_scoped_open(func, as_type)
+
+Call `check_scoped_open(func, as_type) in your implementation of `open(func,
+as_type, data)` if you clean up or `close()` resources by the time `open()`
+returns.
+
+That is, if the unscoped form `use(open(AsType, data))` is invalid and the
+following scoped form required:
+
+```
+open(AsType, data) do x
+    use(x)
+end
+```
+
+The dicotomy of resource handling techniques in `open()` are due to an
+unresolved language design problem of how resource handling and cleanup should
+work (see https://github.com/JuliaLang/julia/issues/7721).
+"""
+check_scoped_open(func, as_type) = nothing
+
+function check_scoped_open(func::typeof(identity), as_type)
+    throw(ArgumentError("You must use the scoped form `open(your_function, AsType, data)` to open as type $as_type"))
+end
 
 #-------------------------------------------------------------------------------
 # Entry point utilities

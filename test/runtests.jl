@@ -1,6 +1,27 @@
 using DataSets
 using Test
 
+using DataSets: FileSystemRoot
+
+#-------------------------------------------------------------------------------
+@testset "open() functions" begin
+    proj = DataSets.load_project("Data.toml")
+
+    file = File(FileSystemRoot("data/file.txt"))
+    @test        open(identity, String, file)         == "Hello world!\n"
+    @test String(open(identity, Vector{UInt8}, file)) == "Hello world!\n"
+    @test open(io->read(io,String), IO, file)         == "Hello world!\n"
+    @test open(io->read(io,String), IO, file)         == "Hello world!\n"
+    @test open(identity, File, file) === file
+    # Unscoped form for types which support it.
+    @test open(String, file)                == "Hello world!\n"
+    @test String(open(Vector{UInt8}, file)) == "Hello world!\n"
+    @test_throws ArgumentError("You must use the scoped form `open(your_function, AsType, data)` to open as type IO") open(IO, file)
+
+    tree = FileTree(FileSystemRoot("data"))
+    @test open(identity, FileTree, tree) === tree
+end
+
 #-------------------------------------------------------------------------------
 # Data entry points
 read_data = nothing
@@ -17,9 +38,10 @@ end
     global read_data = (x_data=x_data,)
 end
 
-proj = DataSets.load_project("Data.toml")
 
 @testset "@datafunc and @datarun" begin
+    proj = DataSets.load_project("Data.toml")
+
     @datarun proj main1("a_text_file", "a_tree_example")
 
     @test read_data == (x_string="Hello world!\n",

@@ -22,11 +22,17 @@ _abspath(file::File) = _abspath(file.root, file.path)
 Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(_abspath(root, path))
 Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(_abspath(root, path))
 
-function Base.open(f::Function, ::Type{IO}, file::File{<:AbstractFileSystemRoot},
+# TODO: Is it possible to get a generic version of this without type piracy?
+function Base.open(::Type{T}, file::File{<:AbstractFileSystemRoot}; kws...) where {T}
+    open(identity, T, file)
+end
+
+function Base.open(f::Function, ::Type{IO}, file::File{<:AbstractFileSystemRoot};
                    write=false, read=!write, kws...)
     if !iswriteable(file.root) && write
         error("Error writing file at read-only path $path")
     end
+    check_scoped_open(f, IO)
     open(f, _abspath(file.root, file.path); read=read, write=write, kws...)
 end
 
