@@ -12,19 +12,19 @@
 import AbstractTrees: AbstractTrees, children
 
 #-------------------------------------------------------------------------------
-abstract type AbstractFileTree; end
+abstract type AbstractBlobTree; end
 
 # The tree API
 
 # TODO: Should we have `istree` separate from `isdir`?
-Base.isdir(x::AbstractFileTree) = true
-Base.isfile(tree::AbstractFileTree) = false
+Base.isdir(x::AbstractBlobTree) = true
+Base.isfile(tree::AbstractBlobTree) = false
 
 # Number of children is not known without a (potentially high-latency) call to
 # an external resource
-Base.IteratorSize(tree::AbstractFileTree) = Base.SizeUnknown()
+Base.IteratorSize(tree::AbstractBlobTree) = Base.SizeUnknown()
 
-function Base.iterate(tree::AbstractFileTree, state=nothing)
+function Base.iterate(tree::AbstractBlobTree, state=nothing)
     if state == nothing
         # By default, call `children(tree)` to eagerly get a list of children
         # for iteration.
@@ -43,7 +43,7 @@ function Base.iterate(tree::AbstractFileTree, state=nothing)
 end
 
 """
-    children(tree::AbstractFileTree)
+    children(tree::AbstractBlobTree)
 
 Return an array of the children of `tree`. A child `x` may abstractly either be
 another tree (`children(x)` returns a collection) or a file, where `children(x)`
@@ -52,7 +52,7 @@ returns `()`.
 Note that this is subtly different from `readdir(path)` which returns relative
 paths, or `readdir(path, join=true)` which returns absolute paths.
 """
-function children(tree::AbstractFileTree)
+function children(tree::AbstractBlobTree)
     # TODO: Is dispatch to the root a correct default?
     children(tree.root, tree.path)
 end
@@ -63,7 +63,7 @@ end
 
 Pretty printing of file trees, in the spirit of the unix `tree` utility.
 """
-function showtree(io::IO, tree::AbstractFileTree; maxdepth=5)
+function showtree(io::IO, tree::AbstractBlobTree; maxdepth=5)
     println(io, "📂 ", tree)
     _showtree(io, tree, "", maxdepth)
 end
@@ -73,11 +73,11 @@ struct ShownTree
 end
 # Use a wrapper rather than defaulting to stdout so that this works in more
 # functional environments such as Pluto.jl
-showtree(tree::AbstractFileTree) = ShownTree(tree)
+showtree(tree::AbstractBlobTree) = ShownTree(tree)
 
 Base.show(io::IO, s::ShownTree) = showtree(io, s.tree)
 
-function _showtree(io::IO, tree::AbstractFileTree, prefix, depth)
+function _showtree(io::IO, tree::AbstractBlobTree, prefix, depth)
     cs = children(tree)
     for (i,x) in enumerate(cs)
         islast = i == lastindex(cs) # TODO: won't work if children() is lazy
@@ -97,7 +97,7 @@ function _showtree(io::IO, tree::AbstractFileTree, prefix, depth)
     end
 end
 
-function Base.copy!(dst::AbstractFileTree, src::AbstractFileTree)
+function Base.copy!(dst::AbstractBlobTree, src::AbstractBlobTree)
     for x in src
         newpath = joinpath(dst, basename(x))
         if isdir(x)
@@ -114,51 +114,51 @@ function Base.copy!(dst::AbstractFileTree, src::AbstractFileTree)
 end
 
 #-------------------------------------------------------------------------------
-struct File{Root}
+struct Blob{Root}
     root::Root
     path::RelPath
 end
 
-File(root) = File(root, RelPath())
+Blob(root) = Blob(root, RelPath())
 
-Base.basename(file::File) = basename(file.path)
-Base.abspath(file::File) = AbsPath(file.root, file.path)
-Base.isdir(file::File) = false
-Base.isfile(file::File) = true
+Base.basename(file::Blob) = basename(file.path)
+Base.abspath(file::Blob) = AbsPath(file.root, file.path)
+Base.isdir(file::Blob) = false
+Base.isfile(file::Blob) = true
 
-function Base.show(io::IO, ::MIME"text/plain", file::File)
+function Base.show(io::IO, ::MIME"text/plain", file::Blob)
     print(io, "📄 ", file.path, " @ ", _abspath(file.root))
 end
 
-function AbstractTrees.printnode(io::IO, file::File)
+function AbstractTrees.printnode(io::IO, file::Blob)
     print(io, "📄 ",  basename(file))
 end
 
-function Base.open(f::Function, ::Type{Vector{UInt8}}, file::File)
+function Base.open(f::Function, ::Type{Vector{UInt8}}, file::Blob)
     open(IO, file) do io
         f(read(io)) # TODO: use Mmap?
     end
 end
 
-function Base.open(f::Function, ::Type{String}, file::File)
+function Base.open(f::Function, ::Type{String}, file::Blob)
     open(Vector{UInt8}, file) do buf
         f(String(buf))
     end
 end
 
 #-------------------------------------------------------------------------------
-struct FileTree{Root} <: AbstractFileTree
+struct BlobTree{Root} <: AbstractBlobTree
     root::Root
     path::RelPath
 end
 
-FileTree(root) = FileTree(root, RelPath())
+BlobTree(root) = BlobTree(root, RelPath())
 
-function AbstractTrees.printnode(io::IO, tree::FileTree)
+function AbstractTrees.printnode(io::IO, tree::BlobTree)
     print(io, "📂 ",  basename(tree))
 end
 
-function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
+function Base.show(io::IO, ::MIME"text/plain", tree::AbstractBlobTree)
     # TODO: Ideally we'd use
     # AbstractTrees.print_tree(io, tree, 1)
     # However, this is hard to use efficiently; we'd need to implement a lazy
@@ -174,20 +174,20 @@ function Base.show(io::IO, ::MIME"text/plain", tree::AbstractFileTree)
     end
 end
 
-Base.basename(tree::FileTree) = basename(tree.path)
-Base.abspath(tree::FileTree) = AbsPath(tree.root, tree.path)
+Base.basename(tree::BlobTree) = basename(tree.path)
+Base.abspath(tree::BlobTree) = AbsPath(tree.root, tree.path)
 
 # getindex vs joinpath:
 #  - getindex about indexing the datastrcutre; therefore it looks in the
 #    filesystem to only return things which exist.
 #  - joinpath just makes paths, not knowing whether they exist.
-function Base.getindex(tree::FileTree, path::RelPath)
+function Base.getindex(tree::BlobTree, path::RelPath)
     relpath = joinpath(tree.path, path)
     root = tree.root
     if isdir(root, relpath)
-        FileTree(root, relpath)
+        BlobTree(root, relpath)
     elseif isfile(root, relpath)
-        File(root, relpath)
+        Blob(root, relpath)
     elseif ispath(root, relpath)
         AbsPath(root, relpath) # Not great?
     else
@@ -195,48 +195,48 @@ function Base.getindex(tree::FileTree, path::RelPath)
     end
 end
 
-function Base.getindex(tree::FileTree, name::AbstractString)
+function Base.getindex(tree::BlobTree, name::AbstractString)
     getindex(tree, joinpath(RelPath(), name))
 end
 
 # We've got a weird mishmash of path vs tree handling here.
 # TODO: Can we refactor this to cleanly separate the filesystem commands (which
-# take abstract paths?) from FileTree and File which act as an abstraction over
+# take abstract paths?) from BlobTree and Blob which act as an abstraction over
 # the filesystem or other storage mechanisms?
-function Base.joinpath(tree::FileTree, r::RelPath)
+function Base.joinpath(tree::BlobTree, r::RelPath)
     AbsPath(tree.root, joinpath(tree.path, r))
 end
 
-function Base.joinpath(tree::FileTree, s::AbstractString)
+function Base.joinpath(tree::BlobTree, s::AbstractString)
     AbsPath(tree.root, joinpath(tree.path, s))
 end
 
-function Base.haskey(tree::FileTree, name::AbstractString)
+function Base.haskey(tree::BlobTree, name::AbstractString)
     ispath(tree.root, joinpath(tree.path, name))
 end
 
-function Base.readdir(tree::FileTree)
+function Base.readdir(tree::BlobTree)
     readdir(tree.root, tree.path)
 end
 
-function Base.rm(tree::FileTree; kws...)
+function Base.rm(tree::BlobTree; kws...)
     rm(tree.root, tree.path; kws...)
 end
 
-function children(tree::FileTree)
+function children(tree::BlobTree)
     child_names = readdir(tree)
     [tree[c] for c in child_names]
 end
 
-Base.open(f::Function, file::File; kws...) = open(f, file.root, file.path; kws...)
+Base.open(f::Function, file::Blob; kws...) = open(f, file.root, file.path; kws...)
 Base.open(f::Function, path::AbsPath; kws...) = open(f, path.root, path.path; kws...)
 
-function Base.open(f::Function, ::Type{FileTree}, tree::FileTree)
+function Base.open(f::Function, ::Type{BlobTree}, tree::BlobTree)
     f(tree)
 end
 
-function Base.open(f::Function, ::Type{File}, file::File)
+function Base.open(f::Function, ::Type{Blob}, file::Blob)
     f(file)
 end
 
-# Base.open(::Type{T}, file::File; kws...) where {T} = open(identity, T, file.root, file.path; kws...)
+# Base.open(::Type{T}, file::Blob; kws...) where {T} = open(identity, T, file.root, file.path; kws...)

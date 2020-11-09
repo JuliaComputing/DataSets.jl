@@ -72,10 +72,10 @@ julia> open(IO, dataset(project, "a_text_file")) do io
 content = "Hello world!\n"
 ```
 
-Let's also look at the tree example using the tree data type `DataSets.FileTree`:
+Let's also look at the tree example using the tree data type `BlobTree`:
 
 ```jldoctest
-julia> open(FileTree, dataset(project, "a_tree_example"))
+julia> open(BlobTree, dataset(project, "a_tree_example"))
 📂 Tree  @ DataSets.FileSystemRoot("/home/chris/.julia/dev/DataSets/docs/src/data/csvset", true, false)
  📄 1.csv
  📄 2.csv
@@ -89,13 +89,13 @@ into your program.
 
 For example, here we define an entry point called `main` which takes
 * DataSet type `Blob`, presenting it as a `String` within the program
-* DataSet type `Tree`, presenting it as a `FileTree` within the program
+* DataSet type `BlobTree`, presenting it as a `BlobTree` within the program
 
 The `@datarun` macro allows you to call such program entry points, extracting
 named data sets from a given project.
 
 ```jldoctest
-julia> @datafunc function main(x::Blob=>String, t::Tree=>FileTree)
+julia> @datafunc function main(x::Blob=>String, t::BlobTree=>BlobTree)
            @show x
            open(String, t["1.csv"]) do csv_data
                @show csv_data
@@ -108,4 +108,7 @@ x = "Hello world!\n"
 csv_data = "Name,Age\n\"Aaron\",23\n\"Harry\",42\n"
 ```
 
-## File and FileTree types
+In a given program it's possible to have multiple entry points by simply
+defining multiple `@datafunc` implementations. In this case `@datarun` will
+dispatch to the entry point with the matching `DataSet` type.
+

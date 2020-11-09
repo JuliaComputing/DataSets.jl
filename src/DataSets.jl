@@ -7,7 +7,7 @@ using Pkg.TOML
 # using HDF5
 
 export DataSet, dataset, @datafunc, @datarun
-export File, FileTree, newfile, newdir
+export Blob, BlobTree, newfile, newdir
 
 #-------------------------------------------------------------------------------
 
@@ -187,7 +187,7 @@ end
 # Built in Data models
 
 include("paths.jl")
-include("FileTree.jl")
+include("BlobTree.jl")
 
 # Prototype stuff. Put this back in once the core is working.
 # include("ZipTree.jl")

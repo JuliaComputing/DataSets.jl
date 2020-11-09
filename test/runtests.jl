@@ -7,26 +7,26 @@ using DataSets: FileSystemRoot
 @testset "open() functions" begin
     proj = DataSets.load_project("Data.toml")
 
-    file = File(FileSystemRoot("data/file.txt"))
-    @test        open(identity, String, file)         == "Hello world!\n"
-    @test String(open(identity, Vector{UInt8}, file)) == "Hello world!\n"
-    @test open(io->read(io,String), IO, file)         == "Hello world!\n"
-    @test open(io->read(io,String), IO, file)         == "Hello world!\n"
-    @test open(identity, File, file) === file
+    blob = Blob(FileSystemRoot("data/file.txt"))
+    @test        open(identity, String, blob)         == "Hello world!\n"
+    @test String(open(identity, Vector{UInt8}, blob)) == "Hello world!\n"
+    @test open(io->read(io,String), IO, blob)         == "Hello world!\n"
+    @test open(io->read(io,String), IO, blob)         == "Hello world!\n"
+    @test open(identity, Blob, blob) === blob
     # Unscoped form for types which support it.
-    @test open(String, file)                == "Hello world!\n"
-    @test String(open(Vector{UInt8}, file)) == "Hello world!\n"
-    @test_throws ArgumentError("You must use the scoped form `open(your_function, AsType, data)` to open as type IO") open(IO, file)
+    @test open(String, blob)                == "Hello world!\n"
+    @test String(open(Vector{UInt8}, blob)) == "Hello world!\n"
+    @test_throws ArgumentError("You must use the scoped form `open(your_function, AsType, data)` to open as type IO") open(IO, blob)
 
-    tree = FileTree(FileSystemRoot("data"))
-    @test open(identity, FileTree, tree) === tree
+    tree = BlobTree(FileSystemRoot("data"))
+    @test open(identity, BlobTree, tree) === tree
 end
 
 #-------------------------------------------------------------------------------
 # Data entry points
 read_data = nothing
 
-@datafunc function main1(x::Blob=>String, t::Tree=>FileTree)
+@datafunc function main1(x::Blob=>String, t::Tree=>BlobTree)
     csv_data = open(IO, t["1.csv"]) do io
         read(io,String)
     end

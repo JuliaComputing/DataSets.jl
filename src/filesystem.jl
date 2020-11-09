@@ -14,8 +14,8 @@ end
 
 _joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
 _abspath(path::AbsPath) = _abspath(path.root, path.path)
-_abspath(tree::FileTree) = _abspath(tree.root, tree.path)
-_abspath(file::File) = _abspath(file.root, file.path)
+_abspath(tree::BlobTree) = _abspath(tree.root, tree.path)
+_abspath(file::Blob) = _abspath(file.root, file.path)
 
 # TODO: would it be better to express the following dispatch in terms of
 # AbsPath{<:AbstractFileSystemRoot} rather than usin double dispatch?
@@ -23,11 +23,11 @@ Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(_abspath(root, p
 Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(_abspath(root, path))
 
 # TODO: Is it possible to get a generic version of this without type piracy?
-function Base.open(::Type{T}, file::File{<:AbstractFileSystemRoot}; kws...) where {T}
+function Base.open(::Type{T}, file::Blob{<:AbstractFileSystemRoot}; kws...) where {T}
     open(identity, T, file)
 end
 
-function Base.open(f::Function, ::Type{IO}, file::File{<:AbstractFileSystemRoot};
+function Base.open(f::Function, ::Type{IO}, file::Blob{<:AbstractFileSystemRoot};
                    write=false, read=!write, kws...)
     if !iswriteable(file.root) && write
         error("Error writing file at read-only path $path")
@@ -41,7 +41,7 @@ function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)
         error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
     end
     mkdir(_abspath(root, path), args...)
-    return FileTree(root, path)
+    return BlobTree(root, path)
 end
 
 function Base.rm(root::AbstractFileSystemRoot, path::RelPath; kws...)
@@ -94,16 +94,16 @@ _abspath(root::TempFilesystemRoot) = root.path
 function newdir(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
     # cleanup=false: we manage our own cleanup via the finalizer
     path = mktempdir(_abspath(ctx), cleanup=false)
-    return FileTree(TempFilesystemRoot(path))
+    return BlobTree(TempFilesystemRoot(path))
 end
-newdir(ctx::FileTree) = newdir(ctx.root)
+newdir(ctx::BlobTree) = newdir(ctx.root)
 
 function newfile(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
     path, io = mktemp(_abspath(ctx), cleanup=false)
     close(io)
-    return File(TempFilesystemRoot(path))
+    return Blob(TempFilesystemRoot(path))
 end
-newfile(ctx::FileTree) = newfile(ctx.root)
+newfile(ctx::BlobTree) = newfile(ctx.root)
 
 function newfile(f::Function, ctx=FileSystemRoot(tempdir(), write=true))
     path, io = mktemp(_abspath(ctx), cleanup=false)
@@ -115,7 +115,7 @@ function newfile(f::Function, ctx=FileSystemRoot(tempdir(), write=true))
     finally
         close(io)
     end
-    return File(TempFilesystemRoot(path))
+    return Blob(TempFilesystemRoot(path))
 end
 
 # Move srcpath to destpath, making all attempts to preserve the original
@@ -162,8 +162,8 @@ function mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
     end
 end
 
-function Base.setindex!(tree::FileTree{<:AbstractFileSystemRoot},
-                        tmpdata::Union{File{TempFilesystemRoot},FileTree{TempFilesystemRoot}},
+function Base.setindex!(tree::BlobTree{<:AbstractFileSystemRoot},
+                        tmpdata::Union{Blob{TempFilesystemRoot},BlobTree{TempFilesystemRoot}},
                         name::AbstractString)
     if !iswriteable(tree.root)
         error("Attempt to move to a read-only tree $tree")
@@ -201,10 +201,10 @@ function connect_filesystem(f, config)
     type = config["type"]
     if type == "Blob"
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
-        storage = File(FileSystemRoot(path))
+        storage = Blob(FileSystemRoot(path))
     elseif type == "Tree"
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
-        storage = FileTree(FileSystemRoot(path))
+        storage = BlobTree(FileSystemRoot(path))
     end
     f(storage)
 end

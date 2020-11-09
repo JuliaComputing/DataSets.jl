@@ -19,8 +19,8 @@ DataSets.load_project
 ## Data Models
 
 ```@docs
-File
-FileTree
+Blob
+BlobTree
 newfile
 newdir
 ```

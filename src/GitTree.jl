@@ -19,7 +19,7 @@ function Base.open(f::Function, root::GitTreeRoot)
     git(subcmd) = setenv(`git $subcmd`, dir=root.path)
     s = read(git(`status --porcelain`), String)
     isempty(s) || error("Git working copy is dirty")
-    result = f(FileTree(root))
+    result = f(BlobTree(root))
     # FIXME: From the point of view of this code, it seems unnatural to attach
     # `write` to GitTreeRoot.
     if root.write
@@ -30,13 +30,13 @@ function Base.open(f::Function, root::GitTreeRoot)
 end
 
 #-------------------------------------------------------------------------------
-# FIXME: Factor together with FileTreeRoot
+# FIXME: Factor together with BlobTreeRoot
 
-function Base.haskey(tree::FileTree{GitTreeRoot}, name::AbstractString)
+function Base.haskey(tree::BlobTree{GitTreeRoot}, name::AbstractString)
     ispath(_abspath(joinpath(tree,name)))
 end
 
-function Base.open(func::Function, f::File{GitTreeRoot}; write=false, read=!write)
+function Base.open(func::Function, f::Blob{GitTreeRoot}; write=false, read=!write)
     if !f.root.write && write
         error("Error writing file at read-only path $f")
     end
@@ -55,6 +55,6 @@ function Base.mkdir(p::AbsPath{GitTreeRoot}, args...)
         error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
     end
     mkdir(_abspath(p), args...)
-    return FileTree(p.root, p.path)
+    return BlobTree(p.root, p.path)
 end
 
