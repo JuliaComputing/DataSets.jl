@@ -202,9 +202,11 @@ function connect_filesystem(f, config)
     if type == "Blob"
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
         storage = Blob(FileSystemRoot(path))
-    elseif type == "Tree"
+    elseif type == "BlobTree"
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
         storage = BlobTree(FileSystemRoot(path))
+    else
+        throw(ArgumentError("DataSet type $type not supported on the filesystem"))
     end
     f(storage)
 end

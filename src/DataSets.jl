@@ -365,8 +365,10 @@ function _run(func, dispatch_table, ds::DataSet...)
     #    system and dispatch rules.
     dtypes = dataset_type.(ds)
     if !haskey(dispatch_table, dtypes)
-        table = join(string.(first.(dispatch_table)), "\n")
-        throw(ArgumentError("""No matching function $func for DataSet types $dtypes. Table:
+        table = join(string.(keys(dispatch_table)), "\n")
+        throw(ArgumentError("""No matching function $func for DataSet types $dtypes.
+
+                            The types must match one of the following:
                             $table
                             """))
     end

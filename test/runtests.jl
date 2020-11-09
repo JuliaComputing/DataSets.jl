@@ -26,7 +26,7 @@ end
 # Data entry points
 read_data = nothing
 
-@datafunc function main1(x::Blob=>String, t::Tree=>BlobTree)
+@datafunc function main1(x::Blob=>String, t::BlobTree=>BlobTree)
     csv_data = open(IO, t["1.csv"]) do io
         read(io,String)
     end
@@ -49,6 +49,9 @@ end
 
     @datarun proj main1("a_text_file")
     @test read_data == (x_data="Hello world!\n",)
+
+    # No match for a single tree
+    @test_throws ArgumentError @datarun proj main1("a_tree_example")
 end
 
 #-------------------------------------------------------------------------------

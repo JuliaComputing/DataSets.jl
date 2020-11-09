@@ -74,7 +74,7 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
     [datasets.storage]
     driver="FileSystem"
-    type="Tree"
+    type="BlobTree"
     path="@__DIR__/data/csvset"
 
     # TODO: Add data maps here which expose it logically as a single CSV?
