@@ -13,7 +13,7 @@ using ..DataSets
 import ..DataSets: DataSet, DataProject, link_dataset, load_project
 
 using REPL: LineEdit
-using HTTP.URIs
+using URIs
 using ReplMaker
 
 # Global state for Julia session

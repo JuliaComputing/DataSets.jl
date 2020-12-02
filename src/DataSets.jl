@@ -83,8 +83,8 @@ end
 function check_dataset_name(name::AbstractString)
     # Disallow punctuation in DataSet names for now, as it may be needed as
     # delimiters in data-related syntax (eg, for the data REPL).
-    if !occursin(r"^[[:alnum:]_ ]*$", name)
-        error("DataSet name is only allowed to contain letters, numbers, spaces or underscores; got \"$name\"")
+    if !occursin(r"^[[:alnum:]_]*$", name)
+        error("DataSet name is only allowed to contain letters, numbers or underscores; got \"$name\"")
     end
 end
 
