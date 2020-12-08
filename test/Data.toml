@@ -1,4 +1,4 @@
-data_toml_version=0
+data_config_version=0
 
 # An example data project
 # First, a list of the names of datasets within the DataProject

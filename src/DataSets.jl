@@ -135,7 +135,7 @@ end
 function load_project(filename::AbstractString)
     toml_str = _fill_template(dirname(abspath(filename)), read(filename, String))
     toml = TOML.parse(toml_str)
-    format_ver = toml["data_toml_version"]
+    format_ver = toml["data_config_version"]
     if format_ver > 0
         error("Data toml format version $format_ver is newer than supported")
     end
