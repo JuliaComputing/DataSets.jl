@@ -56,9 +56,13 @@ end
 
 #-------------------------------------------------------------------------------
 @testset "Data set parsing" begin
+    # Valid names
     @test DataSets.check_dataset_name("a_b") === nothing
+    @test DataSets.check_dataset_name("a1") === nothing
     @test DataSets.check_dataset_name("δεδομένα") === nothing
-    @test_throws ErrorException("DataSet name is only allowed to contain letters, numbers or underscores; got \"a/b\"") DataSets.check_dataset_name("a/b")
+    # Invalid names
+    @test_throws ErrorException("DataSet name must start with a letter, and can only contain letters, numbers or underscores; got \"a/b\"") DataSets.check_dataset_name("a/b")
+    @test_throws ErrorException DataSets.check_dataset_name("1")
     @test_throws ErrorException DataSets.check_dataset_name("a b")
     @test_throws ErrorException DataSets.check_dataset_name("a.b")
     @test_throws ErrorException DataSets.check_dataset_name("a:b")
