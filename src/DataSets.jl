@@ -137,8 +137,8 @@ end
 """
     load_project([path | config_dict])
 
-Load a data project from `config` which can be a RelPath,AbsPath to a TOML
-file, or a config dictionary.
+Load a data project from a `path::AbstractPath` referring to a TOML file, or
+from a `config_dict` which should be in the Data.toml format.
 """
 function load_project(config::AbstractDict)
     format_ver = config["data_config_version"]
