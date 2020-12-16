@@ -25,3 +25,7 @@ newfile
 newdir
 ```
 
+## Storage Drivers
+```@docs
+DataSets.add_storage_driver
+```
