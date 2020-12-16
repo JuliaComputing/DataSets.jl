@@ -134,13 +134,17 @@ end
 
 function load_project(filename::AbstractString)
     toml_str = _fill_template(dirname(abspath(filename)), read(filename, String))
-    toml = TOML.parse(toml_str)
-    format_ver = toml["data_config_version"]
+    config = TOML.parse(toml_str)
+    load_project(config)
+end
+
+function load_project(config::AbstractDict)
+    format_ver = config["data_config_version"]
     if format_ver > 0
-        error("Data toml format version $format_ver is newer than supported")
+        error("data_config_version=$format_ver is newer than supported")
     end
     proj = DataProject()
-    for data_toml in toml["datasets"]
+    for data_toml in config["datasets"]
         dataset = read_toml(DataSet, data_toml)
         link_dataset(proj, dataset.name => dataset)
     end
