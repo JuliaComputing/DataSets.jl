@@ -1,7 +1,7 @@
 module DataSets
 
 using UUIDs
-using Pkg.TOML
+using TOML
 
 # using CSV, CodecZlib
 # using HDF5
