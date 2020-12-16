@@ -202,10 +202,29 @@ include("BlobTree.jl")
 
 _drivers = Dict{String,Any}()
 
-function Base.open(f::Function, as_type, conf::DataSet)
-    storage_config = conf.storage
+"""
+    add_storage_driver(driver_name=>storage_opener)
+
+Associate DataSet storage driver named `driver_name` with `storage_opener`.
+When a `dataset` with `storage.driver == driver_name` is opened,
+`storage_opener(user_func, storage_config, dataset)` will be called. Any
+existing storage driver registered to `driver_name` will be overwritten.
+
+As a matter of convention, `storage_opener` should generally take configuration
+from `storage_config` which is just `dataset.storage`. But to avoid config
+duplication it may also use the content of `dataset`, (for example, dataset.uuid).
+
+Packages which define new storage drivers should generally call
+`add_storage_driver()` within their `__init__()` functions.
+"""
+function add_storage_driver((name,opener)::Pair)
+    _drivers[name] = opener
+end
+
+function Base.open(f::Function, as_type, dataset::DataSet)
+    storage_config = dataset.storage
     driver = _drivers[storage_config["driver"]]
-    driver(storage_config) do storage
+    driver(storage_config, dataset) do storage
         open(f, as_type, storage)
     end
 end

@@ -196,7 +196,7 @@ end
 
 #--------------------------------------------------
 
-function connect_filesystem(f, config)
+function connect_filesystem(f, config, _)
     path = config["path"]
     type = config["type"]
     if type == "Blob"
@@ -210,5 +210,5 @@ function connect_filesystem(f, config)
     end
     f(storage)
 end
-_drivers["FileSystem"] = connect_filesystem
+add_storage_driver("FileSystem"=>connect_filesystem)
 

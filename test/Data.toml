@@ -1,31 +1,7 @@
+# This specifies the version of the Data.toml configuration
 data_config_version=0
 
-# An example data project
-# First, a list of the names of datasets within the DataProject
-#
-# A bit like Project.toml?
-#
-# Commented out for now, for simplicity. Instead, we just use the list of
-# datasets below.
-#
-# [[dataproject.datasets]]
-# name="a_text_file"
-# uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
-#
-# [[dataproject.datasets]]
-# name="a_tree_example"
-# uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
-#
-# [[dataproject.datasets]]
-# name="a_table"
-# uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
-
-
-#-------------------------------------------------------------------------------
-# This is an array of the actual `DataSet`s. Somewhat unclear whether this
-# should actually be in this file.
-#
-# A bit like Manifest.toml?
+# The following is an array of the actual `DataSet`s.
 
 #--------------------------------------------------
 [[datasets]]
