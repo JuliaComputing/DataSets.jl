@@ -9,6 +9,8 @@ using TOML
 export DataSet, dataset, @datafunc, @datarun
 export Blob, BlobTree, newfile, newdir
 
+include("paths.jl")
+
 #-------------------------------------------------------------------------------
 
 #=
@@ -132,12 +134,12 @@ function _fill_template(toml_path, toml_str)
     toml_str = replace(toml_str, "@__DIR__"=>toml_path)
 end
 
-function load_project(filename::AbstractString)
-    toml_str = _fill_template(dirname(abspath(filename)), read(filename, String))
-    config = TOML.parse(toml_str)
-    load_project(config)
-end
+"""
+    load_project([path | config_dict])
 
+Load a data project from `config` which can be a RelPath,AbsPath to a TOML
+file, or a config dictionary.
+"""
 function load_project(config::AbstractDict)
     format_ver = config["data_config_version"]
     if format_ver > 0
@@ -149,6 +151,13 @@ function load_project(config::AbstractDict)
         link_dataset(proj, dataset.name => dataset)
     end
     proj
+end
+
+function load_project(path::AbstractPath)
+    path = abspath(path)
+    toml_str = _fill_template(dirname(sys_abspath(path)), read(path, String))
+    config = TOML.parse(toml_str)
+    load_project(config)
 end
 
 function link_dataset(proj::DataProject, (name,data)::Pair)
@@ -190,7 +199,6 @@ end
 #-------------------------------------------------------------------------------
 # Built in Data models
 
-include("paths.jl")
 include("BlobTree.jl")
 
 # Prototype stuff. Put this back in once the core is working.

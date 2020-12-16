@@ -127,7 +127,7 @@ Base.isdir(file::Blob) = false
 Base.isfile(file::Blob) = true
 
 function Base.show(io::IO, ::MIME"text/plain", file::Blob)
-    print(io, "📄 ", file.path, " @ ", _abspath(file.root))
+    print(io, "📄 ", file.path, " @ ", sys_abspath(file.root))
 end
 
 function AbstractTrees.printnode(io::IO, file::Blob)

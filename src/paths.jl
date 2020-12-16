@@ -2,6 +2,8 @@ export @path_str
 
 #-------------------------------------------------------------------------------
 
+abstract type AbstractPath ; end
+
 """
     path"relative/path/to/resource"
 
@@ -12,7 +14,7 @@ As a key, the resource referred to by a path may or may not exist.
 Conversely, `BlobTree` and `Blob` refer to the actual data stored with a given
 key.
 """
-struct RelPath
+struct RelPath <: AbstractPath
     components::Vector{String}
 end
 
@@ -38,7 +40,6 @@ Base.dirname(path::RelPath) = RelPath(path.components[1:end-1])
 
 Base.print(io::IO, p::RelPath) = print(io, join(p.components, '/'))
 Base.show(io::IO,  p::RelPath) = print(io, "path", repr(string(p)))
-
 
 function Base.startswith(a::RelPath, b::RelPath)
     return length(a.components) >= length(b.components) &&
@@ -74,7 +75,7 @@ end
 
 As a *key*, the resource pointed to by this key may or may not exist.
 """
-struct AbsPath{Root}
+struct AbsPath{Root} <: AbstractPath
     root::Root
     path::RelPath
 end
@@ -87,4 +88,7 @@ end
 
 Base.mkdir(p::AbsPath; kws...) = mkdir(p.root, p.path; kws...)
 Base.rm(p::AbsPath; kws...) = rm(p.root, p.path; kws...)
+
+Base.read(p::AbsPath, ::Type{T}) where {T} = read(p.root, p.path, T)
+Base.abspath(p::AbsPath) = p
 

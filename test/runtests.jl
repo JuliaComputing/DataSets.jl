@@ -6,7 +6,7 @@ using DataSets: FileSystemRoot
 
 #-------------------------------------------------------------------------------
 @testset "DataSet config" begin
-    proj = DataSets.load_project("Data.toml")
+    proj = DataSets.load_project(path"Data.toml")
 
     ds = dataset(proj, "a_text_file")
     @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
@@ -49,7 +49,7 @@ end
 
 
 @testset "@datafunc and @datarun" begin
-    proj = DataSets.load_project("Data.toml")
+    proj = DataSets.load_project(path"Data.toml")
 
     @datarun proj main1("a_text_file", "a_tree_example")
 
@@ -96,5 +96,5 @@ end
     end
     @test open(io->read(io,String), IO, temptree["d1"]["hi_2.txt"]) == "hi 1 2\n"
     @test open(io->read(io,String), IO, temptree["d3"]["hi_1.txt"]) == "hi 3 1\n"
-    @test isfile(DataSets._abspath(temptree["d1"]["hi_2.txt"]))
+    @test isfile(DataSets.sys_abspath(temptree["d1"]["hi_2.txt"]))
 end

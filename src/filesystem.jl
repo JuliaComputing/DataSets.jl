@@ -4,23 +4,25 @@
 #
 abstract type AbstractFileSystemRoot end
 
-# These underscore functions _abspath and _joinpath generate/joins OS-specific
+# These underscore functions sys_abspath and sys_joinpath generate/joins OS-specific
 # _local filesystem paths_ out of logical paths. They should be defined only
 # for trees which are rooted in the actual filesystem.
-function _abspath(root::AbstractFileSystemRoot, path::RelPath)
-    rootpath = _abspath(root)
-    return isempty(path.components) ? rootpath : joinpath(rootpath, _joinpath(path))
+function sys_abspath(root::AbstractFileSystemRoot, path::RelPath)
+    rootpath = sys_abspath(root)
+    return isempty(path.components) ? rootpath : joinpath(rootpath, sys_joinpath(path))
 end
 
-_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
-_abspath(path::AbsPath) = _abspath(path.root, path.path)
-_abspath(tree::BlobTree) = _abspath(tree.root, tree.path)
-_abspath(file::Blob) = _abspath(file.root, file.path)
+sys_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
+sys_abspath(path::AbsPath) = sys_abspath(path.root, path.path)
+sys_abspath(tree::BlobTree) = sys_abspath(tree.root, tree.path)
+sys_abspath(file::Blob) = sys_abspath(file.root, file.path)
 
 # TODO: would it be better to express the following dispatch in terms of
 # AbsPath{<:AbstractFileSystemRoot} rather than usin double dispatch?
-Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(_abspath(root, path))
-Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(_abspath(root, path))
+Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(sys_abspath(root, path))
+Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(sys_abspath(root, path))
+Base.read(root::AbstractFileSystemRoot, path::RelPath, ::Type{T}) where {T} =
+    read(sys_abspath(root, path), T)
 
 # TODO: Is it possible to get a generic version of this without type piracy?
 function Base.open(::Type{T}, file::Blob{<:AbstractFileSystemRoot}; kws...) where {T}
@@ -33,22 +35,22 @@ function Base.open(f::Function, ::Type{IO}, file::Blob{<:AbstractFileSystemRoot}
         error("Error writing file at read-only path $path")
     end
     check_scoped_open(f, IO)
-    open(f, _abspath(file.root, file.path); read=read, write=write, kws...)
+    open(f, sys_abspath(file.root, file.path); read=read, write=write, kws...)
 end
 
 function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)
     if !iswriteable(root)
-        error("Cannot make directory in read-only tree root at $(_abspath(p.root))")
+        error("Cannot make directory in read-only tree root at $(sys_abspath(p.root))")
     end
-    mkdir(_abspath(root, path), args...)
+    mkdir(sys_abspath(root, path), args...)
     return BlobTree(root, path)
 end
 
 function Base.rm(root::AbstractFileSystemRoot, path::RelPath; kws...)
-    rm(_abspath(root,path); kws...)
+    rm(sys_abspath(root,path); kws...)
 end
 
-Base.readdir(root::AbstractFileSystemRoot, path::RelPath) = readdir(_abspath(root, path))
+Base.readdir(root::AbstractFileSystemRoot, path::RelPath) = readdir(sys_abspath(root, path))
 
 #--------------------------------------------------
 struct FileSystemRoot <: AbstractFileSystemRoot
@@ -64,8 +66,12 @@ end
 
 iswriteable(root::FileSystemRoot) = root.write
 
-_abspath(root::FileSystemRoot) = root.path
+sys_abspath(root::FileSystemRoot) = root.path
 
+# For use outside DataSets, we will assume the special case that abspath() with
+# a RelPath refers to the current working directory on the local system.
+Base.abspath(relpath::RelPath) =
+    AbsPath(FileSystemRoot(pwd(); write=true, read=true), relpath)
 
 #--------------------------------------------------
 # Infrastructure for a somewhat more functional interface for creating file
@@ -85,28 +91,28 @@ mutable struct TempFilesystemRoot <: AbstractFileSystemRoot
 end
 
 function Base.readdir(root::TempFilesystemRoot, path::RelPath)
-    return isnothing(root.path) ? [] : readdir(_abspath(root, path))
+    return isnothing(root.path) ? [] : readdir(sys_abspath(root, path))
 end
 
 iswriteable(root::TempFilesystemRoot) = true
-_abspath(root::TempFilesystemRoot) = root.path
+sys_abspath(root::TempFilesystemRoot) = root.path
 
 function newdir(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
     # cleanup=false: we manage our own cleanup via the finalizer
-    path = mktempdir(_abspath(ctx), cleanup=false)
+    path = mktempdir(sys_abspath(ctx), cleanup=false)
     return BlobTree(TempFilesystemRoot(path))
 end
 newdir(ctx::BlobTree) = newdir(ctx.root)
 
 function newfile(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
-    path, io = mktemp(_abspath(ctx), cleanup=false)
+    path, io = mktemp(sys_abspath(ctx), cleanup=false)
     close(io)
     return Blob(TempFilesystemRoot(path))
 end
 newfile(ctx::BlobTree) = newfile(ctx.root)
 
 function newfile(f::Function, ctx=FileSystemRoot(tempdir(), write=true))
-    path, io = mktemp(_abspath(ctx), cleanup=false)
+    path, io = mktemp(sys_abspath(ctx), cleanup=false)
     try
         f(io)
     catch
@@ -176,9 +182,9 @@ function Base.setindex!(tree::BlobTree{<:AbstractFileSystemRoot},
         # Eh, the number of ways the user can misuse this isn't really funny :-/
         error("Temporary trees must be moved in full. The tree had non-empty path $(tree.path)")
     end
-    destpath = _abspath(joinpath(tree, name))
-    srcpath = _abspath(tmpdata)
-    tempdir_parent = _abspath(tree)
+    destpath = sys_abspath(joinpath(tree, name))
+    srcpath = sys_abspath(tmpdata)
+    tempdir_parent = sys_abspath(tree)
     mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
     # Transfer ownership of the data to `tree`. This is ugly to be sure, as it
     # leaves `tmpdata` empty! However, we'll have to live with this wart unless
