@@ -1,12 +1,21 @@
 using DataSets
 using Test
+using UUIDs
 
 using DataSets: FileSystemRoot
 
 #-------------------------------------------------------------------------------
-@testset "open() functions" begin
+@testset "DataSet config" begin
     proj = DataSets.load_project("Data.toml")
 
+    ds = dataset(proj, "a_text_file")
+    @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
+    @test ds.name == "a_text_file"
+    @test ds.description == "A text file"
+    @test ds.storage["driver"] == "FileSystem"
+end
+
+@testset "open() functions" begin
     blob = Blob(FileSystemRoot("data/file.txt"))
     @test        open(identity, String, blob)         == "Hello world!\n"
     @test String(open(identity, Vector{UInt8}, blob)) == "Hello world!\n"

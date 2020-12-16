@@ -34,19 +34,19 @@ struct DataSet
     # For now, the representation `conf` contains data read directly from the
     # TOML. Once the design has settled we might get some explicit fields and
     # do validation.
+    uuid::UUID     # Unique identifier for the dataset. Use uuid4() to create these.
     conf
 
     function DataSet(conf)
         _check_keys(conf, DataSet, ["uuid", "storage", "name"])
         check_dataset_name(conf["name"])
-        new(conf)
+        new(UUID(conf["uuid"]), conf)
     end
 
     #=
     name::String # Default name for convenience.
                          # The binding to an actual name is managed by the data
                          # project.
-    uuid::UUID     # Unique ID for use in distributed settings
     storage        # Storage config and driver definition
     maps::Vector{DataMap}
 
@@ -102,7 +102,7 @@ function Base.getproperty(d::DataSet, name::Symbol)
 end
 
 function Base.show(io::IO, d::DataSet)
-    print(io, DataSet, " $(d.name) $(repr(d.uuid))")
+    print(io, DataSet, " $(d.name) $(d.uuid)")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
