@@ -7,6 +7,7 @@ dataset
 DataSet
 DataSets.DataProject
 DataSets.load_project
+DataSets.load_project!
 ```
 
 ## Data function entry points
