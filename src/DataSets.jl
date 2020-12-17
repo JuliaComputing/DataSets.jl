@@ -138,7 +138,7 @@ end
 Current version of the data configuration format, as reflected in the
 Data.toml data_config_version key.
 """
-CURRENT_DATA_CONFIG_VERSION = 0
+const CURRENT_DATA_CONFIG_VERSION = 0
 
 """
     load_project([path | config_dict])
