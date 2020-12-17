@@ -16,17 +16,6 @@ using REPL: LineEdit
 using URIs
 using ReplMaker
 
-# Global state for Julia session
-
-_current_project = DataProject()
-
-function load_project!(toml_filename::AbstractString)
-    global _current_project = load_project(toml_filename)
-end
-
-# Is allowing this global default good or bad?
-DataSets.dataset(name) = dataset(_current_project, name)
-
 # Possible REPL verbs
 #
 # Adding

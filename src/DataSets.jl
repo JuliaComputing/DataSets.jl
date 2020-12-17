@@ -139,6 +139,8 @@ end
 
 Load a data project from a `path::AbstractPath` referring to a TOML file, or
 from a `config_dict` which should be in the Data.toml format.
+
+See also [`load_project!`](@ref).
 """
 function load_project(config::AbstractDict)
     format_ver = config["data_config_version"]
@@ -194,6 +196,21 @@ function Base.show(io::IO, ::MIME"text/plain", proj::DataProject)
             println(io)
         end
     end
+end
+
+#-------------------------------------------------------------------------------
+# Global datasets configuration for current Julia session
+_current_project = DataProject()
+
+dataset(name) = dataset(_current_project, name)
+
+"""
+    load_project!(path_or_config)
+
+Like `load_project()`, but populates the default global dataset project.
+"""
+function load_project!(path_or_config)
+    global _current_project = load_project(path_or_config)
 end
 
 #-------------------------------------------------------------------------------
@@ -346,11 +363,20 @@ proj = DataSets.load_project("Data.toml")
 @datarun proj f("a", "b")
 ```
 """
-macro datarun(proj, call)
+macro datarun(args...)
+    if length(args) == 2
+        proj, call = args
+        esc_proj = esc(proj)
+    elseif length(args) == 1
+        esc_proj = :_current_project
+        call = args[1]
+    else
+        throw(ArgumentError("@datarun macro expects one or two arguments"))
+    end
     esc_funcname = esc(call.args[1])
     esc_funcargs = esc.(call.args[2:end])
     quote
-        datarun($(esc(proj)), $esc_funcname, $(esc_funcargs...))
+        datarun($esc_proj, $esc_funcname, $(esc_funcargs...))
     end
 end
 

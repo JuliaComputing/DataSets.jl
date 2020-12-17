@@ -15,6 +15,7 @@ using DataSets: FileSystemRoot
     @test ds.storage["driver"] == "FileSystem"
 end
 
+#-------------------------------------------------------------------------------
 @testset "open() functions" begin
     blob = Blob(FileSystemRoot("data/file.txt"))
     @test        open(identity, String, blob)         == "Hello world!\n"
@@ -61,6 +62,18 @@ end
 
     # No match for a single tree
     @test_throws ArgumentError @datarun proj main1("a_tree_example")
+end
+
+#-------------------------------------------------------------------------------
+@testset "DataSet global project" begin
+    DataSets.load_project!(path"Data.toml")
+
+    ds = dataset("a_text_file")
+    @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
+
+    global read_data = nothing
+    @datarun main1("a_text_file")
+    @test read_data == (x_data="Hello world!\n",)
 end
 
 #-------------------------------------------------------------------------------
