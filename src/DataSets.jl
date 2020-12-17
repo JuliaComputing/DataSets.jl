@@ -135,6 +135,12 @@ function _fill_template(toml_path, toml_str)
 end
 
 """
+Current version of the data configuration format, as reflected in the
+Data.toml data_config_version key.
+"""
+CURRENT_DATA_CONFIG_VERSION = 0
+
+"""
     load_project([path | config_dict])
 
 Load a data project from a `path::AbstractPath` referring to a TOML file, or
@@ -144,7 +150,7 @@ See also [`load_project!`](@ref).
 """
 function load_project(config::AbstractDict)
     format_ver = config["data_config_version"]
-    if format_ver > 0
+    if format_ver > CURRENT_DATA_CONFIG_VERSION
         error("data_config_version=$format_ver is newer than supported")
     end
     proj = DataProject()
