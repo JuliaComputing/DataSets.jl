@@ -270,6 +270,11 @@ include("filesystem.jl")
 # opened. See check_scoped_open for a way to help users avoid errors when using
 # this (ie, if `identity` is not a valid argument to open() because resources
 # would be closed before it returns).
+#
+# FIXME: Consider removing this. It should likely be replaced with `load()`, in
+# analogy to FileIO.jl's load operation:
+# * `load()` is "load the entire file into memory as such-and-such type"
+# * `open()` is "open this resource, and run some function while it's open"
 Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
 
 """

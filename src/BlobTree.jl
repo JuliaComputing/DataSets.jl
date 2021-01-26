@@ -19,6 +19,7 @@ abstract type AbstractBlobTree; end
 # TODO: Should we have `istree` separate from `isdir`?
 Base.isdir(x::AbstractBlobTree) = true
 Base.isfile(tree::AbstractBlobTree) = false
+Base.ispath(x::AbstractBlobTree) = true
 
 # Number of children is not known without a (potentially high-latency) call to
 # an external resource
@@ -125,26 +126,61 @@ Base.basename(file::Blob) = basename(file.path)
 Base.abspath(file::Blob) = AbsPath(file.root, file.path)
 Base.isdir(file::Blob) = false
 Base.isfile(file::Blob) = true
+Base.ispath(file::Blob) = true
 
 function Base.show(io::IO, ::MIME"text/plain", file::Blob)
-    print(io, "📄 ", file.path, " @ ", sys_abspath(file.root))
+    print(io, "📄 ", file.path, " @ ", summary(file.root))
 end
 
 function AbstractTrees.printnode(io::IO, file::Blob)
     print(io, "📄 ",  basename(file))
 end
 
+# Opening as Vector{UInt8} or as String uses IO interface
 function Base.open(f::Function, ::Type{Vector{UInt8}}, file::Blob)
-    open(IO, file) do io
+    open(IO, file.root, file.path) do io
         f(read(io)) # TODO: use Mmap?
     end
 end
 
 function Base.open(f::Function, ::Type{String}, file::Blob)
-    open(Vector{UInt8}, file) do buf
-        f(String(buf))
+    open(IO, file.root, file.path) do io
+        f(read(io, String))
     end
 end
+
+# Default open-type for Blob is IO
+Base.open(f::Function, file::Blob; kws...) = open(f, IO, file.root, file.path; kws...)
+
+# Opening Blob as itself is trivial
+function Base.open(f::Function, ::Type{Blob}, file::Blob)
+    f(file)
+end
+
+# open with other types T defers to the underlying storage system
+function Base.open(f::Function, ::Type{T}, file::Blob; kws...) where {T}
+    open(f, T, file.root, file.path; kws...)
+end
+
+# Unscoped form of open
+function Base.open(::Type{T}, file::Blob; kws...) where {T}
+    open(identity, T, file; kws...)
+end
+
+# read() is also supported for `Blob`s
+Base.read(file::Blob) = read(file.root, file.path)
+Base.read(file::Blob, ::Type{T}) where {T} = read(file.root, file.path, T)
+
+
+# Support for opening AbsPath
+#
+# TODO: Put this elsewhere?
+function Base.open(f::Function, ::Type{T}, path::AbsPath; kws...) where {T}
+    open(f, T, path.root, path.path; kws...)
+end
+
+Base.open(f::Function, path::AbsPath; kws...) = open(f, IO, path.root, path.path; kws...)
+
 
 #-------------------------------------------------------------------------------
 struct BlobTree{Root} <: AbstractBlobTree
@@ -165,7 +201,7 @@ function Base.show(io::IO, ::MIME"text/plain", tree::AbstractBlobTree)
     # `children()` for all our trees. It'd be much easier if
     # `AbstractTrees.has_children()` was used consistently upstream.
     cs = children(tree)
-    println(io, "📂 Tree ", tree.path, " @ ", tree.root)
+    println(io, "📂 Tree ", tree.path, " @ ", summary(tree.root))
     for (i, c) in enumerate(cs)
         print(io, " ", isdir(c) ? '📁' : '📄', " ", basename(c))
         if i != length(cs)
@@ -228,15 +264,8 @@ function children(tree::BlobTree)
     [tree[c] for c in child_names]
 end
 
-Base.open(f::Function, file::Blob; kws...) = open(f, file.root, file.path; kws...)
-Base.open(f::Function, path::AbsPath; kws...) = open(f, path.root, path.path; kws...)
-
 function Base.open(f::Function, ::Type{BlobTree}, tree::BlobTree)
     f(tree)
-end
-
-function Base.open(f::Function, ::Type{Blob}, file::Blob)
-    f(file)
 end
 
 # Base.open(::Type{T}, file::Blob; kws...) where {T} = open(identity, T, file.root, file.path; kws...)

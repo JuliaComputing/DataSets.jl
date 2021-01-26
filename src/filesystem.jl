@@ -21,21 +21,21 @@ sys_abspath(file::Blob) = sys_abspath(file.root, file.path)
 # AbsPath{<:AbstractFileSystemRoot} rather than usin double dispatch?
 Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(sys_abspath(root, path))
 Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(sys_abspath(root, path))
+Base.ispath(root::AbstractFileSystemRoot, path::RelPath) = ispath(sys_abspath(root, path))
 Base.read(root::AbstractFileSystemRoot, path::RelPath, ::Type{T}) where {T} =
     read(sys_abspath(root, path), T)
+Base.read(root::AbstractFileSystemRoot, path::RelPath) where {T} =
+    read(sys_abspath(root, path))
 
-# TODO: Is it possible to get a generic version of this without type piracy?
-function Base.open(::Type{T}, file::Blob{<:AbstractFileSystemRoot}; kws...) where {T}
-    open(identity, T, file)
-end
+Base.summary(io::IO, root::AbstractFileSystemRoot) = print(io, sys_abspath(root))
 
-function Base.open(f::Function, ::Type{IO}, file::Blob{<:AbstractFileSystemRoot};
+function Base.open(f::Function, ::Type{IO}, root::AbstractFileSystemRoot, path;
                    write=false, read=!write, kws...)
-    if !iswriteable(file.root) && write
+    if !iswriteable(root) && write
         error("Error writing file at read-only path $path")
     end
     check_scoped_open(f, IO)
-    open(f, sys_abspath(file.root, file.path); read=read, write=write, kws...)
+    open(f, sys_abspath(root, path); read=read, write=write, kws...)
 end
 
 function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)
