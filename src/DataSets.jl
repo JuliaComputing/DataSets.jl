@@ -141,7 +141,7 @@ Data.toml data_config_version key.
 const CURRENT_DATA_CONFIG_VERSION = 0
 
 """
-    load_project([path | config_dict])
+    load_project!([path | config_dict])
 
 Load a data project from a `path::AbstractPath` referring to a TOML file, or
 from a `config_dict` which should be in the Data.toml format.
