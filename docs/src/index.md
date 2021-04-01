@@ -5,10 +5,8 @@ code you need to write. It's annoying to constantly rewrite
 * Command line wrappers which deal with paths to data storage
 * Code to load and save from various *data storage systems* (eg, local
   filesystem data; local git data, downloaders for remote data over various
-  protocols, etc)
-* Code to load the same data model from various serializations (eg, text:
-  plain/compressed, property tree: toml/json/msgpack/bson/...
-  tabular: csv/csv.gz/parquet/sqlite/...)
+  protocols, cloud storage access, proprietary data servers, etc)
+* Code to load the same data model from various serializations
 * Code to deal with data lifecycle; versions, provenance, etc
 
 DataSets provides scaffolding to make this kind of code more reusable. We want
