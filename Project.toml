@@ -5,6 +5,7 @@ version = "0.2.1"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+CRC32c = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 ReplMaker = "b873ce64-0db9-51f5-a568-4457d8e49576"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -13,8 +14,8 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 [compat]
 AbstractTrees = "0.3"
 ReplMaker = "0.2"
-julia = "1"
 TOML = "1"
+julia = "1.5"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

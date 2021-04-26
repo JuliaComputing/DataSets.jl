@@ -2,6 +2,7 @@ module DataSets
 
 using UUIDs
 using TOML
+using CRC32c
 
 # using CSV, CodecZlib
 # using HDF5
@@ -114,12 +115,38 @@ end
 
 #-------------------------------------------------------------------------------
 """
+Subtypes of `AbstractDataProject` have the interface
+
+  - List   - `keys`, `iterate`
+  - Search - `get(project, dataset_name, default)`
+  - Search - `haskey`, `getindex` - implemented in terms of `get` by default.
+  - Fancy search - `dataset` - implemented in terms of `get`
+
+"""
+abstract type AbstractDataProject end
+
+function Base.getindex(proj::AbstractDataProject, name::AbstractString)
+    data = get(proj, name, nothing)
+    data != nothing || error("Dataset $(repr(name)) not found")
+    data
+end
+
+function dataset(proj::AbstractDataProject, name::AbstractString)
+    # Non-fancy search... for now :)
+    proj[name]
+end
+
+function Base.haskey(proj::AbstractDataProject, name::AbstractString)
+    get(proj, name, nothing) !== nothing
+end
+
+"""
     DataProject
 
-A data project is a collection of DataSets with associated names. Names are
-unique within the project.
+A concrete data project is a collection of DataSets with associated names.
+Names are unique within the project.
 """
-struct DataProject
+struct DataProject <: AbstractDataProject
     datasets::Dict{String,DataSet}
 end
 
@@ -163,7 +190,12 @@ end
 
 function load_project(path::AbstractPath)
     path = abspath(path)
-    toml_str = _fill_template(dirname(sys_abspath(path)), read(path, String))
+    content = read(path, String)
+    _load_project(content, dirname(sys_abspath(path)))
+end
+
+function _load_project(content::AbstractString, sys_data_dir)
+    toml_str = _fill_template(sys_data_dir, content)
     config = TOML.parse(toml_str)
     load_project(config)
 end
@@ -183,9 +215,14 @@ function unlink_dataset(proj::DataProject, name::AbstractString)
     d
 end
 
-function dataset(proj::DataProject, name)
-    proj.datasets[name]
+function Base.get(proj::DataProject, name::AbstractString, default)
+    get(proj.datasets, name, default)
 end
+
+Base.keys(proj::DataProject) = keys(proj.datasets)
+
+Base.iterate(proj::DataProject) = iterate(proj.datasets)
+Base.iterate(proj::DataProject, state) = iterate(proj.datasets, state)
 
 function Base.show(io::IO, ::MIME"text/plain", proj::DataProject)
     if isempty(proj.datasets)
@@ -204,11 +241,65 @@ function Base.show(io::IO, ::MIME"text/plain", proj::DataProject)
     end
 end
 
+include("file_data_projects.jl")
+
+"""
+In analogy to `Base.LOAD_PATH` and `Base.DEPOT_PATH`,
+
+ - `@` means the path of the current active project as returned by
+   `Base.active_project(false)` This can be useful when you're "doing
+   scripting" and you've got a project-specific Data.toml which resides
+   next to the Project.toml. This only applies to projects which are explicitly
+   set with `julia --project` or `Pkg.activate()`.
+ - Explicit paths may be either directories or files in Data.toml format.
+   For directories, the filename "Data.toml" is implicitly appended.
+ - As in DEPOT_PATH, an *empty* path component means the user's default
+   Julia home directory, `joinpath(homedir(), ".julia", "datasets")`
+
+This simplified version of the code loading rules (LOAD_PATH/DEPOT_PATH) is
+used as it seems unlikely that we'll want data location to be version-
+dependent in the same way that that code is.
+
+Unlike `LOAD_PATH`, `JULIA_DATASETS_PATH` is represented inside the program as
+a stack of `AbstractDataProject`
+
+TODO: Do we want the `@name` form for searching for a specific named
+environment similar to DEPOT_PATH? How would these be found?
+"""
+function _init_data_project_stack!(project_stack, env)
+    env_search_path = get(env, "JULIA_DATASETS_PATH", nothing)
+    if isnothing(env_search_path) || env_search_path == ""
+        paths = ["@", ""]
+    else
+        paths = expanduser.(split(env_search_path, Sys.iswindows() ? ';' : ':'))
+    end
+    for path in paths
+        if path == "@"
+            project = ActiveDataProject()
+        else
+            if path == ""
+                path = joinpath(homedir(), "datasets", "Data.toml")
+            else
+                path = abspath(path)
+                if isdir(path)
+                    path = joinpath(path, "Data.toml")
+                end
+            end
+            project = TomlFileDataProject(path)
+        end
+        push!(project_stack, project)
+    end
+end
+
+function __init__()
+    _init_data_project_stack!(DATA_PROJECTS, ENV)
+end
+
 #-------------------------------------------------------------------------------
 # Global datasets configuration for current Julia session
+#
+# TODO: Deprecate this ?
 _current_project = DataProject()
-
-dataset(name) = dataset(_current_project, name)
 
 """
     load_project!(path_or_config)
@@ -216,7 +307,33 @@ dataset(name) = dataset(_current_project, name)
 Like `load_project()`, but populates the default global dataset project.
 """
 function load_project!(path_or_config)
+    # TODO: Deprecate this ?
     global _current_project = load_project(path_or_config)
+end
+
+# A stack of data projects, with the top of the stack being searched first.
+DATA_PROJECTS = AbstractDataProject[]
+
+_data_projects() = AbstractDataProject[_current_project; DATA_PROJECTS]
+
+dataset(name) = dataset(_data_projects(), name)
+
+function dataset(data_projects::AbstractVector{<:AbstractDataProject}, name)
+    for project in data_projects
+        d = get(project, name, nothing)
+        if !isnothing(d)
+            return d
+        end
+    end
+    error("Dataset named $name not found")
+end
+
+function dataset_names()
+    names = []
+    for project in _data_projects()
+        append!(names, keys(project))
+    end
+    unique(names)
 end
 
 #-------------------------------------------------------------------------------
