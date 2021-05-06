@@ -82,13 +82,11 @@ abstract type AbstractTomlFileDataProject <: AbstractDataProject end
 
 function Base.get(proj::AbstractTomlFileDataProject, name::AbstractString, default)
     cache = _get_cached(proj)
-    # Cache path is now up to date.
     isnothing(cache) ? default : get(cache, name, default)
 end
 
 function Base.keys(proj::AbstractTomlFileDataProject)
     cache = _get_cached(proj)
-    # Cache path is now up to date.
     isnothing(cache) ? () : keys(cache)
 end
 
@@ -114,6 +112,8 @@ function Base.iterate(proj::AbstractTomlFileDataProject, state=nothing)
     end
 end
 
+Base.pairs(proj::AbstractTomlFileDataProject) = pairs(_get_cached(proj))
+
 #-------------------------------------------------------------------------------
 """
 Data project which automatically updates based on a TOML file on the local
@@ -136,6 +136,8 @@ function _get_cached(proj::TomlFileDataProject)
     end
     isnothing(proj.cache) ? nothing : proj.cache[]
 end
+
+project_name(proj::TomlFileDataProject) = proj.path
 
 #------------------------------------------------------------------------------
 """
@@ -160,6 +162,10 @@ function ActiveDataProject()
     proj
 end
 
+function _active_project_data_toml(project_path=Base.active_project(false))
+    joinpath(dirname(project_path), "Data.toml")
+end
+
 function _get_cached(proj::ActiveDataProject)
     active_project = Base.active_project(false)
     if proj.active_project_path != active_project
@@ -167,12 +173,30 @@ function _get_cached(proj::ActiveDataProject)
         if isnothing(active_project)
             proj.cache = nothing
         else
-            data_toml = joinpath(dirname(active_project), "Data.toml")
+            data_toml = _active_project_data_toml(active_project)
             # Need to re-cache
             proj.cache = parse_and_cache_project(data_toml)
         end
         proj.active_project_path = active_project
     end
     isnothing(proj.cache) ? nothing : proj.cache[]
+end
+
+project_name(::ActiveDataProject) = _active_project_data_toml()
+
+#-------------------------------------------------------------------------------
+
+function load_project(path::AbstractPath)
+    TomlFileDataProject(sys_abspath(abspath(path)))
+end
+
+function load_project(path::AbstractString)
+    TomlFileDataProject(abspath(path))
+end
+
+function _load_project(content::AbstractString, sys_data_dir)
+    toml_str = _fill_template(sys_data_dir, content)
+    config = TOML.parse(toml_str)
+    load_project(config)
 end
 
