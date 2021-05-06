@@ -95,20 +95,20 @@ function Base.iterate(proj::AbstractTomlFileDataProject, state=nothing)
     # active project changes concurrently, which means wrapping up the initial
     # result of _get_cached with the iterator state.
     if isnothing(state)
-        cached_proj = _get_cached(proj)
-        if isnothing(cached_proj)
+        cached_values = values(_get_cached(proj))
+        if isnothing(cached_values)
             return nothing
         end
-        wrapped_itr = iterate(cached_proj)
+        wrapped_itr = iterate(cached_values)
     else
-        (cached_proj, wrapped_state) = state
-        wrapped_itr = iterate(cached_proj, wrapped_state)
+        (cached_values, wrapped_state) = state
+        wrapped_itr = iterate(cached_values, wrapped_state)
     end
     if isnothing(wrapped_itr)
         return nothing
     else
         (data, wrapped_state) = wrapped_itr
-        (data, (cached_proj, wrapped_state))
+        (data, (cached_values, wrapped_state))
     end
 end
 
@@ -163,7 +163,9 @@ function ActiveDataProject()
 end
 
 function _active_project_data_toml(project_path=Base.active_project(false))
-    joinpath(dirname(project_path), "Data.toml")
+    isnothing(project_path) ?
+        nothing :
+        joinpath(dirname(project_path), "Data.toml")
 end
 
 function _get_cached(proj::ActiveDataProject)
@@ -186,12 +188,9 @@ project_name(::ActiveDataProject) = _active_project_data_toml()
 
 #-------------------------------------------------------------------------------
 
+# TODO: Deprecate this?
 function load_project(path::AbstractPath)
     TomlFileDataProject(sys_abspath(abspath(path)))
-end
-
-function load_project(path::AbstractString)
-    TomlFileDataProject(abspath(path))
 end
 
 function _load_project(content::AbstractString, sys_data_dir)

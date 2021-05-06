@@ -6,7 +6,7 @@ using DataSets: FileSystemRoot
 
 #-------------------------------------------------------------------------------
 @testset "DataSet config" begin
-    proj = DataSets.load_project(path"Data.toml")
+    proj = DataSets.load_project("Data.toml")
 
     ds = dataset(proj, "a_text_file")
     @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
@@ -50,7 +50,7 @@ end
 
 
 @testset "@datafunc and @datarun" begin
-    proj = DataSets.load_project(path"Data.toml")
+    proj = DataSets.load_project("Data.toml")
 
     @datarun proj main1("a_text_file", "a_tree_example")
 
@@ -64,12 +64,11 @@ end
     @test_throws ArgumentError @datarun proj main1("a_tree_example")
 end
 
-#-------------------------------------------------------------------------------
-@testset "DataSet global project" begin
-    DataSets.load_project!(path"Data.toml")
+@testset "@datarun with DataSet.PROJECT" begin
+    empty!(DataSets.PROJECT)
+    DataSets.load_project!("Data.toml")
 
-    ds = dataset("a_text_file")
-    @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
+    @test dataset("a_text_file").uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
 
     global read_data = nothing
     @datarun main1("a_text_file")
@@ -111,3 +110,5 @@ end
     @test open(io->read(io,String), IO, temptree["d3"]["hi_1.txt"]) == "hi 3 1\n"
     @test isfile(DataSets.sys_abspath(temptree["d1"]["hi_2.txt"]))
 end
+
+include("projects.jl")

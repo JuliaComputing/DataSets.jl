@@ -60,7 +60,6 @@ end
 function _check_keys(toml, context, keys)
     missed_keys = filter(k->!haskey(toml, k), keys)
     if !isempty(missed_keys)
-        @info toml
         error("""
               Missing expected keys:
               $missed_keys
@@ -123,7 +122,7 @@ abstract type AbstractDataProject end
 
 function Base.getindex(proj::AbstractDataProject, name::AbstractString)
     data = get(proj, name, nothing)
-    data != nothing || error("Dataset $(repr(name)) not found")
+    data != nothing || error("DataSet $(repr(name)) not found")
     data
 end
 
@@ -160,6 +159,10 @@ function Base.iterate(project::AbstractDataProject, state=nothing)
     end
     (val, (ks, ks_state))
 end
+
+# Unknown size by default, due to the above get-based implementation of
+# iterate, coupled with possible concurrent modification.
+Base.IteratorSize(::AbstractDataProject) = Base.SizeUnknown()
 
 function Base.pairs(proj::AbstractDataProject)
     ks = keys(proj)
@@ -209,10 +212,15 @@ Data.toml data_config_version key.
 const CURRENT_DATA_CONFIG_VERSION = 0
 
 """
-    load_project([path | config_dict])
+    load_project(path; auto_update=true)
+    load_project(config_dict)
 
-Load a data project from a `path::AbstractPath` referring to a TOML file, or
-from a `config_dict` which should be in the Data.toml format.
+Load a data project from a system `path` referring to a TOML file. If
+`auto_update` is true, the returned project will monitor the file for updates
+and reload when necessary.
+
+Alternatively, create a `DataProject` from a an existing dictionary
+`config_dict`, which should be in the Data.toml format.
 
 See also [`load_project!`](@ref).
 """
@@ -228,6 +236,13 @@ function load_project(config::AbstractDict)
     end
     proj
 end
+
+function load_project(path::AbstractString; auto_update=true)
+    sys_path = abspath(path)
+    auto_update ? TomlFileDataProject(sys_path) :
+                  _load_project(read(sys_path,String), dirname(sys_path))
+end
+
 
 function link_dataset(proj::DataProject, (name,data)::Pair)
     proj.datasets[name] = data
@@ -250,8 +265,13 @@ end
 
 Base.keys(proj::DataProject) = keys(proj.datasets)
 
-Base.iterate(proj::DataProject) = iterate(proj.datasets)
-Base.iterate(proj::DataProject, state) = iterate(proj.datasets, state)
+function Base.iterate(proj::DataProject, state=nothing)
+    # proj.datasets iterates key=>value; need to rejig it to iterate values.
+    itr = isnothing(state) ? iterate(proj.datasets) : iterate(proj.datasets, state)
+    isnothing(itr) && return nothing
+    (x, state) = itr
+    (x.second, state)
+end
 
 function Base.show(io::IO, ::MIME"text/plain", project::AbstractDataProject)
     datasets = collect(pairs(project))
@@ -288,13 +308,13 @@ from first to last.
 Additional projects may be added or removed from the stack with `pushfirst!`,
 `push!` and `empty!`.
 """
-struct DataProjectStack <: AbstractDataProject
+struct StackedDataProject <: AbstractDataProject
     projects::Vector
 end
 
-DataProjectStack() = DataProjectStack([])
+StackedDataProject() = StackedDataProject([])
 
-function Base.keys(stack::DataProjectStack)
+function Base.keys(stack::StackedDataProject)
     names = []
     for project in stack.projects
         append!(names, keys(project))
@@ -302,7 +322,7 @@ function Base.keys(stack::DataProjectStack)
     unique(names)
 end
 
-function Base.get(stack::DataProjectStack, name::AbstractString, default)
+function Base.get(stack::StackedDataProject, name::AbstractString, default)
     for project in stack.projects
         d = get(project, name, nothing)
         if !isnothing(d)
@@ -312,11 +332,11 @@ function Base.get(stack::DataProjectStack, name::AbstractString, default)
 end
 
 # API for manipulating the stack.
-Base.push!(stack::DataProjectStack, project) = push!(stack.projects, project)
-Base.pushfirst!(stack::DataProjectStack, project) = pushfirst!(stack.projects, project)
-Base.empty!(stack::DataProjectStack) = empty!(stack.projects)
+Base.push!(stack::StackedDataProject, project) = push!(stack.projects, project)
+Base.pushfirst!(stack::StackedDataProject, project) = pushfirst!(stack.projects, project)
+Base.empty!(stack::StackedDataProject) = empty!(stack.projects)
 
-function Base.show(io::IO, mime::MIME"text/plain", stack::DataProjectStack)
+function Base.show(io::IO, mime::MIME"text/plain", stack::StackedDataProject)
     summary(io, stack)
     println(io, ":")
     for (i,project) in enumerate(stack.projects)
@@ -360,7 +380,7 @@ function create_project_stack(env)
         end
         push!(stack, project)
     end
-    DataProjectStack(stack)
+    StackedDataProject(stack)
 end
 
 #-------------------------------------------------------------------------------
@@ -392,35 +412,37 @@ used as it seems unlikely that we'll want data location to be version-
 dependent in the same way that that code is.
 
 Unlike `LOAD_PATH`, `JULIA_DATASETS_PATH` is represented inside the program as
-a `DataProjectStack`, and users can add custom projects by defining their own
+a `StackedDataProject`, and users can add custom projects by defining their own
 `AbstractDataProject` subtypes.
 
 Additional projects may be added or removed from the stack with `pushfirst!`,
 `push!` and `empty!`.
 """
-PROJECT = DataProjectStack()
+PROJECT = StackedDataProject()
 
 # deprecated.
-_current_project = DataProjectStack()
+_current_project = DataProject()
 
 function __init__()
     global PROJECT = create_project_stack(ENV)
 end
 
+dataset(name) = dataset(PROJECT, name)
+
 """
     load_project!(path_or_config)
 
-Prepends to the default global dataset search stack.
+Prepends to the default global dataset search stack, [`DataSets.PROJECT`](@ref).
 
-May be renamed in a future release.
+May be renamed in a future version.
 """
 function load_project!(path_or_config)
     new_project = load_project(path_or_config)
     pushfirst!(PROJECT, new_project)
-    _current_project = new_project
+    # deprecated: _current_project reflects only the initial version of the
+    # project on *top* of the stack.
+    _current_project = DataProject(Dict(pairs(new_project)))
 end
-
-dataset(name) = dataset(PROJECT, name)
 
 #-------------------------------------------------------------------------------
 # Storage layer and interface

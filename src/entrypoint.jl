@@ -51,7 +51,7 @@ macro datafunc(func_expr)
     end
 end
 
-function datarun(proj::DataProject, func::Function, data_names::AbstractString...)
+function datarun(proj::AbstractDataProject, func::Function, data_names::AbstractString...)
     ds = map(n->dataset(proj, n), data_names)
     func(ds...)
 end
@@ -74,7 +74,7 @@ macro datarun(args...)
         proj, call = args
         esc_proj = esc(proj)
     elseif length(args) == 1
-        esc_proj = :_current_project
+        esc_proj = :PROJECT
         call = args[1]
     else
         throw(ArgumentError("@datarun macro expects one or two arguments"))
