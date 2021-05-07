@@ -28,7 +28,10 @@ using DataSets:
     @test project_name(proj) == abspath("Data.toml")
 
     # Test @__DIR__ templating
-    @test proj["a_text_file"].storage["path"] == joinpath(@__DIR__, "data/file.txt")
+    # Use `cleanpath` as there's currently a mixture of / and \ on windows
+    # which does work, but is quite ugly.
+    cleanpath(p) = replace(p, '\\'=>'/')
+    @test cleanpath(proj["a_text_file"].storage["path"]) == cleanpath(joinpath(@__DIR__, "data", "file.txt"))
 end
 
 @testset "TomlFileDataProject live updates" begin
