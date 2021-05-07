@@ -3,17 +3,27 @@
 ```@meta
 DocTestSetup = quote
     using DataSets
-    project = DataSets.load_project("src/Data.toml")
+    # Set up data environment for docs build.
+    empty!(DataSets.PROJECT)
+    pushfirst!(DataSets.PROJECT, DataSets.load_project("src/Data.toml"))
 end
+DocTestFilters = [
+    r"(?<=Project: \[).*$",
+    r"path =.*",
+    r"@.*"
+]
 ```
 
-## Declaring DataSet Metadata
+## Making a Data.toml file
 
-To declare data, we create an entry in a TOML file and add some metadata. 
-This is fairly cumbersome right now, but in the future a data REPL will
-mean you don't need to do this by hand.
+Suppose you had some data which you wanted to access located in your Julia home
+directory at `~/.julia/datasets` (or `joinpath(homedir(), ".julia",
+"datasets")` on windows). For this tutorial we'll use the tutorial data from
+the DataSets docs directory at <https://github.com/JuliaComputing/DataSets.jl/tree/master/docs/src/data>..
 
-For now, we'll call our TOML file `Data.toml` and add the following content:
+To make `DataSets` aware of the data, let's create a `Data.toml` file in
+`joinpath(homedir(), ".julia", "datasets", "Data.toml")` and add the following
+content:
 
 ````@eval
 using Markdown
@@ -24,21 +34,44 @@ $(read("Data.toml",String))
 """)
 ````
 
+Because we've written the `Data.toml` into a default location which is searched
+for by [`DataSets.PROJECT`](@ref), it will automatically become accessible in
+the default global data project:
 
-Next, we can load this declarative configuration into our Julia session as a
-new `DataProject` which is just a collection of named `DataSet`s.
+```
+julia> DataSets.PROJECT
+DataSets.StackedDataProject:
+  DataSets.ActiveDataProject:
+    (empty)
+  DataSets.TomlFileDataProject [~/.julia/datasets/Data.toml]:
+    a_text_file    => b498f769-a7f6-4f67-8d74-40b770398f26
+    a_tree_example => e7fd7080-e346-4a68-9ca9-98593a99266a
+```
+
+The [`dataset`](@ref) function can then be used to load metadata for a
+particular dataset:
+
+```jldoctest
+julia> dataset("a_text_file")
+name = "a_text_file"
+uuid = "b498f769-a7f6-4f67-8d74-40b770398f26"
+description = "A text file containing the standard greeting"
+
+[storage]
+driver = "FileSystem"
+type = "Blob"
+path = ".../DataSets/docs/src/data/file.txt"
+```
+
+If you prefer to pass around the data project explicitly rather than relying on
+global configuration this is also possible:
 
 ```jldoctest
 julia> project = DataSets.load_project("src/Data.toml")
-DataProject:
+DataSets.DataProject:
   a_text_file    => b498f769-a7f6-4f67-8d74-40b770398f26
   a_tree_example => e7fd7080-e346-4a68-9ca9-98593a99266a
-```
 
-The `DataSet` metadata can be retrieved from the project using the `dataset`
-function:
-
-```jldoctest
 julia> dataset(project, "a_text_file")
 name = "a_text_file"
 uuid = "b498f769-a7f6-4f67-8d74-40b770398f26"
@@ -47,16 +80,17 @@ description = "A text file containing the standard greeting"
 [storage]
 driver = "FileSystem"
 type = "Blob"
-path = "/home/chris/.julia/dev/DataSets/docs/src/data/file.txt"
+path = ".../DataSets/docs/src/data/file.txt"
 ```
 
-### Loading Data
+## Loading Data
 
-Now that we've loaded a project, we can load the data itself. For example, to
-read the dataset named `"a_text_file"` as a `String`,
+To load data, call the `open()` function on the `DataSet` and pass the desired
+Julia type which will be returned. For example, to read the dataset named
+`"a_text_file"` as a `String`,
 
 ```jldoctest
-julia> open(String, dataset(project, "a_text_file"))
+julia> open(String, dataset("a_text_file"))
 "Hello world!\n"
 ```
 
@@ -64,7 +98,7 @@ It's also possible to open this data as an `IO` stream, in which case the do
 block form should be used:
 
 ```jldoctest
-julia> open(IO, dataset(project, "a_text_file")) do io
+julia> open(IO, dataset("a_text_file")) do io
            content = read(io, String)
            @show content
            nothing
@@ -72,13 +106,24 @@ julia> open(IO, dataset(project, "a_text_file")) do io
 content = "Hello world!\n"
 ```
 
-Let's also look at the tree example using the tree data type `BlobTree`:
+Let's also inspect the tree example using the tree data type
+[`BlobTree`](@ref). Such data trees can be indexed with path components to get
+at the file [`Blob`](@ref)s inside, which in turn can be `open`ed to retrieve
+the data.
 
 ```jldoctest
-julia> open(BlobTree, dataset(project, "a_tree_example"))
-📂 Tree  @ DataSets.FileSystemRoot("/home/chris/.julia/dev/DataSets/docs/src/data/csvset", true, false)
+julia> tree = open(BlobTree, dataset("a_tree_example"))
+📂 Tree  @ .../DataSets/docs/src/data/csvset
  📄 1.csv
  📄 2.csv
+
+julia> tree["1.csv"]
+📄 1.csv @ .../DataSets/test/data/csvset
+
+julia> Text(open(String, tree["1.csv"]))
+Name,Age
+"Aaron",23
+"Harry",42
 ```
 
 ## Program Entry Points
@@ -103,7 +148,7 @@ julia> @datafunc function main(x::Blob=>String, t::BlobTree=>BlobTree)
        end
 main (generic function with 2 methods)
 
-julia> @datarun project main("a_text_file", "a_tree_example");
+julia> @datarun main("a_text_file", "a_tree_example");
 x = "Hello world!\n"
 csv_data = "Name,Age\n\"Aaron\",23\n\"Harry\",42\n"
 ```
