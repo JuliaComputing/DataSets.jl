@@ -15,6 +15,28 @@ using DataSets: FileSystemRoot
     @test ds.storage["driver"] == "FileSystem"
 end
 
+@testset "DataSet config from Dict" begin
+    config = Dict(
+        "data_config_version"=>0,
+        "datasets"=>[Dict(
+            "description"=>"A text file",
+            "name"=>"a_text_file",
+            "uuid"=>"b498f769-a7f6-4f67-8d74-40b770398f26",
+
+            "storage"=>Dict(
+                "driver"=>"FileSystem",
+                "type"=>"Blob",
+                "path"=>joinpath(@__DIR__, "data", "file.txt")
+               )
+           )]
+       )
+
+    proj = DataSets.load_project(config)
+
+    ds = dataset(proj, "a_text_file")
+    @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
+end
+
 #-------------------------------------------------------------------------------
 @testset "open() functions" begin
     blob = Blob(FileSystemRoot("data/file.txt"))

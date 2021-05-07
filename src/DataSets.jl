@@ -243,7 +243,7 @@ Data.toml data_config_version key.
 const CURRENT_DATA_CONFIG_VERSION = 0
 
 """
-    load_project(path; auto_update=true)
+    load_project(path; auto_update=false)
     load_project(config_dict)
 
 Load a data project from a system `path` referring to a TOML file. If
@@ -255,7 +255,13 @@ Alternatively, create a `DataProject` from a an existing dictionary
 
 See also [`load_project!`](@ref).
 """
-function load_project(config::AbstractDict)
+function load_project(path::AbstractString; auto_update=false)
+    sys_path = abspath(path)
+    auto_update ? TomlFileDataProject(sys_path) :
+                  _load_project(read(sys_path,String), dirname(sys_path))
+end
+
+function load_project(config::AbstractDict; kws...)
     format_ver = config["data_config_version"]
     if format_ver > CURRENT_DATA_CONFIG_VERSION
         error("data_config_version=$format_ver is newer than supported")
@@ -268,12 +274,10 @@ function load_project(config::AbstractDict)
     proj
 end
 
-function load_project(path::AbstractString; auto_update=true)
-    sys_path = abspath(path)
-    auto_update ? TomlFileDataProject(sys_path) :
-                  _load_project(read(sys_path,String), dirname(sys_path))
+# TODO: Deprecate this?
+function load_project(path::AbstractPath; kws)
+    load_project(sys_abspath(abspath(path)); kws...)
 end
-
 
 function link_dataset(proj::DataProject, (name,data)::Pair)
     proj.datasets[name] = data
@@ -473,7 +477,7 @@ Prepends to the default global dataset search stack, [`DataSets.PROJECT`](@ref).
 May be renamed in a future version.
 """
 function load_project!(path_or_config)
-    new_project = load_project(path_or_config)
+    new_project = load_project(path_or_config, auto_update=true)
     pushfirst!(PROJECT, new_project)
     # deprecated: _current_project reflects only the initial version of the
     # project on *top* of the stack.

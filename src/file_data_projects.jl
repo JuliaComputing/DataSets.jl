@@ -188,11 +188,6 @@ project_name(::ActiveDataProject) = _active_project_data_toml()
 
 #-------------------------------------------------------------------------------
 
-# TODO: Deprecate this?
-function load_project(path::AbstractPath)
-    TomlFileDataProject(sys_abspath(abspath(path)))
-end
-
 function _load_project(content::AbstractString, sys_data_dir)
     toml_str = _fill_template(sys_data_dir, content)
     config = TOML.parse(toml_str)
