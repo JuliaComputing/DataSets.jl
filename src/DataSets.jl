@@ -2,10 +2,7 @@ module DataSets
 
 using UUIDs
 using TOML
-using CRC32c
-
-# using CSV, CodecZlib
-# using HDF5
+using SHA
 
 export DataSet, dataset, @datafunc, @datarun
 export Blob, BlobTree, newfile, newdir
@@ -275,12 +272,12 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", project::AbstractDataProject)
     datasets = collect(pairs(project))
-    if isempty(datasets)
-        print(io, typeof(project), " (empty)")
-        return
-    end
     summary(io, project)
     println(io, ":")
+    if isempty(datasets)
+        print(io, "  (empty)")
+        return
+    end
     sorted = sort(datasets, by=first)
     maxwidth = maximum(textwidth.(first.(sorted)))
     for (i, (name, data)) in enumerate(sorted)

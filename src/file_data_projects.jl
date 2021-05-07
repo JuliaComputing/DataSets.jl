@@ -12,27 +12,27 @@ mutable struct CachedParsedFile{T}
     inode::UInt64
     mtime::Float64
     size::Int64
-    hash::UInt32
-    d::Union{T,Nothing} # The cached value. `nothing` if file doesn't exist
-    parser              # Parser function used to update the cached value
+    hash::Vector{UInt8}
+    d::T      # The cached value.
+    parser    # Parser function used to update the cached value
 end
 
 function CachedParsedFile{T}(parser::Function, path::String) where T
     s = stat(path)
     if ispath(s)
         content = read(path)
-        crc32 = crc32c(content)
-        d = parser(content)
+        hash = sha1(content)
     else
-        crc32 = UInt32(0)
-        d = nothing
+        hash = UInt8[]
+        content = nothing
     end
+    d = parser(content)
     return CachedParsedFile{T}(
         path,
         s.inode,
         s.mtime,
         s.size,
-        crc32,
+        hash,
         d,
         parser,
     )
@@ -40,9 +40,6 @@ end
 
 function Base.getindex(f::CachedParsedFile)
     s = stat(f.path)
-    if !ispath(s)
-        return nothing
-    end
     time_since_cached = time() - f.mtime
     rough_mtime_granularity = 0.1 # seconds
     # In case the file is being updated faster than the mtime granularity,
@@ -50,8 +47,13 @@ function Base.getindex(f::CachedParsedFile)
     # always check the hash in case we recently created the cache.
     if #==# time_since_cached < rough_mtime_granularity ||
             s.inode != f.inode || s.mtime != f.mtime || f.size != s.size
-        content = read(f.path)
-        new_hash = crc32c(content)
+        if ispath(s)
+            content = read(f.path)
+            new_hash = sha1(content)
+        else
+            content = nothing
+            new_hash = UInt8[]
+        end
         if new_hash != f.hash
             f.inode = s.inode
             f.mtime = s.mtime
@@ -73,7 +75,11 @@ end
 function parse_and_cache_project(sys_path::AbstractString)
     sys_data_dir = dirname(sys_path)
     CachedParsedFile{DataProject}(sys_path) do content
-        _load_project(String(content), sys_data_dir)
+        if isnothing(content)
+            DataProject()
+        else
+            _load_project(String(content), sys_data_dir)
+        end
     end
 end
 
@@ -81,13 +87,11 @@ end
 abstract type AbstractTomlFileDataProject <: AbstractDataProject end
 
 function Base.get(proj::AbstractTomlFileDataProject, name::AbstractString, default)
-    cache = _get_cached(proj)
-    isnothing(cache) ? default : get(cache, name, default)
+    get(_get_cached(proj), name, default)
 end
 
 function Base.keys(proj::AbstractTomlFileDataProject)
-    cache = _get_cached(proj)
-    isnothing(cache) ? () : keys(cache)
+    keys(_get_cached(proj))
 end
 
 function Base.iterate(proj::AbstractTomlFileDataProject, state=nothing)
@@ -121,20 +125,16 @@ filesystem.
 """
 mutable struct TomlFileDataProject <: AbstractTomlFileDataProject
     path::String
-    cache::Union{Nothing,CachedParsedFile{DataProject}}
+    cache::CachedParsedFile{DataProject}
 end
 
 function TomlFileDataProject(path::String)
-    proj = TomlFileDataProject(path, nothing)
-    _get_cached(proj)
-    proj
+    cache = parse_and_cache_project(path)
+    TomlFileDataProject(path, cache)
 end
 
 function _get_cached(proj::TomlFileDataProject)
-    if isnothing(proj.cache) && isfile(proj.path)
-        proj.cache = parse_and_cache_project(proj.path)
-    end
-    isnothing(proj.cache) ? nothing : proj.cache[]
+    proj.cache[]
 end
 
 project_name(proj::TomlFileDataProject) = proj.path
@@ -153,11 +153,11 @@ Several factors make the implementation a bit complicated:
 """
 mutable struct ActiveDataProject <: AbstractTomlFileDataProject
     active_project_path::Union{Nothing,String} # Detects when Base.active_project changes
-    cache::Union{Nothing,CachedParsedFile{DataProject}}
+    cache::Union{DataProject,CachedParsedFile{DataProject}}
 end
 
 function ActiveDataProject()
-    proj = ActiveDataProject(nothing, nothing)
+    proj = ActiveDataProject(nothing, DataProject())
     _get_cached(proj)
     proj
 end
@@ -173,7 +173,7 @@ function _get_cached(proj::ActiveDataProject)
     if proj.active_project_path != active_project
         # The unusual case: active project has changed.
         if isnothing(active_project)
-            proj.cache = nothing
+            proj.cache = DataProject()
         else
             data_toml = _active_project_data_toml(active_project)
             # Need to re-cache
@@ -181,7 +181,7 @@ function _get_cached(proj::ActiveDataProject)
         end
         proj.active_project_path = active_project
     end
-    isnothing(proj.cache) ? nothing : proj.cache[]
+    proj.cache isa DataProject ? proj.cache : proj.cache[]
 end
 
 project_name(::ActiveDataProject) = _active_project_data_toml()

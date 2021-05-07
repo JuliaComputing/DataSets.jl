@@ -80,6 +80,8 @@ end
     proj = ActiveDataProject()
     @test project_name(proj) == nothing
     @test collect(keys(proj)) == []
+    @test collect(pairs(proj)) == []
+    @test collect(proj) == []
     proj_dir = joinpath(@__DIR__, "active_project")
     Pkg.activate(proj_dir)
     @test project_name(proj) == joinpath(proj_dir, "Data.toml")
