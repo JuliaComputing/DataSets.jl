@@ -123,6 +123,40 @@ function Base.getindex(proj::AbstractDataProject, name::AbstractString)
     data
 end
 
+"""
+    dataset(name)
+    dataset(project, name)
+
+Returns the [`DataSet`](@ref) with the given `name` from `project`. If omitted,
+the global data environment [`DataSets.PROJECT`](@ref) will be used.
+
+The `DataSet` is *metadata*, but to use the actual *data* in your program you
+need to use the `open` function to access the `DataSet`'s content as a given
+Julia type.
+
+# Example
+
+To open a dataset named `"a_text_file"` and read the whole content as a String,
+
+```julia
+content = open(String, dataset("a_text_file"))
+```
+
+To open the same dataset as an `IO` stream and read only the first line,
+
+```julia
+open(IO, dataset("a_text_file")) do io
+    line = readline(io)
+    @info "The first line is" line
+end
+```
+
+To open a directory as a browsable tree object,
+
+```julia
+open(BlobTree, dataset("a_tree_example"))
+```
+"""
 function dataset(proj::AbstractDataProject, name::AbstractString)
     # Non-fancy search... for now :)
     # In the future, we can consider parsing `name` into a dataset prefix and a
@@ -299,11 +333,16 @@ end
 
 #-------------------------------------------------------------------------------
 """
-Search stack of AbstractDataProjects, where projects in the stack are searched
-from first to last.
+    StackedDataProject()
+    StackedDataProject(projects)
+
+Search stack of AbstractDataProjects, where projects are searched from the
+first to last element of `projects`.
 
 Additional projects may be added or removed from the stack with `pushfirst!`,
 `push!` and `empty!`.
+
+See also [`DataSets.PROJECT`](@ref).
 """
 struct StackedDataProject <: AbstractDataProject
     projects::Vector
@@ -386,9 +425,9 @@ end
 # Global stack of data projects, with the top of the stack being searched
 # first.
 """
-`DataSets.PROJECT` defines a global data environment for the Julia process. At
-initialization, this is created from the `JULIA_DATASETS_PATH` environment
-variable, which is a list of paths separated by `:` (or `;` on windows).
+`DataSets.PROJECT` contains the default global data environment for the Julia
+process. This is created from the `JULIA_DATASETS_PATH` environment variable at
+initialization which is a list of paths (separated by `:` or `;` on windows).
 
 In analogy to `Base.LOAD_PATH` and `Base.DEPOT_PATH`, the path components are
 interpreted as follows:
