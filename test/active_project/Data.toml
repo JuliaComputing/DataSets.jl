@@ -1,0 +1,11 @@
+data_config_version=0
+
+[[datasets]]
+description="A text file"
+name="a_text_file"
+uuid="314996ef-12be-40d0-912c-9755af354fdb"
+
+    [datasets.storage]
+    driver="FileSystem"
+    type="Blob"
+    path="@__DIR__/data/file.txt"

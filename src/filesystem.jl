@@ -97,6 +97,14 @@ end
 iswriteable(root::TempFilesystemRoot) = true
 sys_abspath(root::TempFilesystemRoot) = root.path
 
+"""
+    newdir()
+
+Create a new temporary `BlobTree` which can have files assigned into it and may
+be assigned to a permanent location in a persistent `BlobTree`. If not assigned
+to a permanent location, the temporary tree is cleaned up during garbage
+collection.
+"""
 function newdir(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
     # cleanup=false: we manage our own cleanup via the finalizer
     path = mktempdir(sys_abspath(ctx), cleanup=false)
@@ -111,6 +119,22 @@ function newfile(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=tru
 end
 newfile(ctx::BlobTree) = newfile(ctx.root)
 
+"""
+    newfile(func)
+    newfile(func, ctx)
+
+Create a new temporary `Blob` object which may be later assigned to a permanent
+location in a `BlobTree`. If not assigned to a permanent location, the
+temporary file is cleaned up during garbage collection.
+
+# Example
+
+```
+tree[path"some/demo/path.txt"] = newfile() do io
+    println(io, "Hi there!")
+end
+```
+"""
 function newfile(f::Function, ctx=FileSystemRoot(tempdir(), write=true))
     path, io = mktemp(sys_abspath(ctx), cleanup=false)
     try
@@ -202,6 +226,7 @@ end
 
 #--------------------------------------------------
 
+# Filesystem storage driver
 function connect_filesystem(f, config, _)
     path = config["path"]
     type = config["type"]

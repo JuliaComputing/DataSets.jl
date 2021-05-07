@@ -115,6 +115,18 @@ function Base.copy!(dst::AbstractBlobTree, src::AbstractBlobTree)
 end
 
 #-------------------------------------------------------------------------------
+"""
+    Blob(root)
+    Blob(root, relpath)
+
+`Blob` represents the location of a collection of unstructured binary data. The
+location is a path `relpath` relative to some `root` data resource.
+
+A `Blob` can naturally be `open()`ed as a `Vector{UInt8}`, but can also be
+mapped into the program as an `IO` byte stream, or interpreted as a `String`.
+
+Blobs can be arranged into hierarchies "directories" via the `BlobTree` type.
+"""
 struct Blob{Root}
     root::Root
     path::RelPath
@@ -183,6 +195,41 @@ Base.open(f::Function, path::AbsPath; kws...) = open(f, IO, path.root, path.path
 
 
 #-------------------------------------------------------------------------------
+"""
+    BlobTree(root)
+
+`BlobTree` is a "directory tree" like hierarchy which may have `Blob`s and
+`BlobTree`s as children.
+
+The tree implements the `AbstracTrees.children()` interface and may be indexed
+with paths to traverse the hierarchy down to the leaves ("files") which are of
+type `Blob`. Individual leaves may be `open()`ed as various Julia types.
+
+# Example
+
+Normally you'd construct these via the [`dataset`](@ref) function which takes
+care of constructing the correct `root` object. However, here's a direct
+demonstration:
+
+```
+julia> tree = BlobTree(DataSets.FileSystemRoot(dirname(pathof(DataSets))), path"../test/data")
+📂 Tree ../test/data @ /home/chris/.julia/dev/DataSets/src
+ 📁 csvset
+ 📄 file.txt
+ 📄 foo.txt
+ 📄 people.csv.gz
+
+julia> tree["csvset"]
+📂 Tree ../test/data/csvset @ /home/chris/.julia/dev/DataSets/src
+ 📄 1.csv
+ 📄 2.csv
+
+julia> tree[path"csvset"]
+📂 Tree ../test/data/csvset @ /home/chris/.julia/dev/DataSets/src
+ 📄 1.csv
+ 📄 2.csv
+```
+"""
 struct BlobTree{Root} <: AbstractBlobTree
     root::Root
     path::RelPath
