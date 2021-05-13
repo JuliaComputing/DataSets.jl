@@ -29,13 +29,17 @@ Base.read(root::AbstractFileSystemRoot, path::RelPath) where {T} =
 
 Base.summary(io::IO, root::AbstractFileSystemRoot) = print(io, sys_abspath(root))
 
-function Base.open(f::Function, ::Type{IO}, root::AbstractFileSystemRoot, path;
-                   write=false, read=!write, kws...)
+function Base.open(f::Function, as_type::Type{IO}, root::AbstractFileSystemRoot, path;
+                   kws...)
+    @context f(@! open(as_type, root, path; kws...))
+end
+
+@! function Base.open(::Type{IO}, root::AbstractFileSystemRoot, path;
+                      write=false, read=!write, kws...)
     if !iswriteable(root) && write
         error("Error writing file at read-only path $path")
     end
-    check_scoped_open(f, IO)
-    open(f, sys_abspath(root, path); read=read, write=write, kws...)
+    @! open(sys_abspath(root, path); read=read, write=write, kws...)
 end
 
 function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)

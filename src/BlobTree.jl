@@ -174,9 +174,40 @@ function Base.open(f::Function, ::Type{T}, file::Blob; kws...) where {T}
     open(f, T, file.root, file.path; kws...)
 end
 
-# Unscoped form of open
+# Deprecated unscoped form of open
 function Base.open(::Type{T}, file::Blob; kws...) where {T}
+    Base.depwarn("`open(T,::Blob)` is deprecated. Use `@! open(T, ::Blob)` instead.")
     open(identity, T, file; kws...)
+end
+
+# Contexts.jl - based versions of the above.
+
+@! function Base.open(::Type{Vector{UInt8}}, file::Blob)
+    @context begin
+        # TODO: use Mmap?
+        read(@! open(IO, file.root, file.path))
+    end
+end
+
+@! function Base.open(::Type{String}, file::Blob)
+    @context begin
+        read(@!(open(IO, file.root, file.path)), String)
+    end
+end
+
+# Default open-type for Blob is IO
+@! function Base.open(file::Blob; kws...)
+    @! open(IO, file.root, file.path; kws...)
+end
+
+# Opening Blob as itself is trivial
+@! function Base.open(::Type{Blob}, file::Blob)
+    file
+end
+
+# open with other types T defers to the underlying storage system
+@! function Base.open(::Type{T}, file::Blob; kws...) where {T}
+    @! open(T, file.root, file.path; kws...)
 end
 
 # read() is also supported for `Blob`s
@@ -313,6 +344,10 @@ end
 
 function Base.open(f::Function, ::Type{BlobTree}, tree::BlobTree)
     f(tree)
+end
+
+@! function Base.open(::Type{BlobTree}, tree::BlobTree)
+    tree
 end
 
 # Base.open(::Type{T}, file::Blob; kws...) where {T} = open(identity, T, file.root, file.path; kws...)

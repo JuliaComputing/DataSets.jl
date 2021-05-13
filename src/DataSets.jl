@@ -3,6 +3,7 @@ module DataSets
 using UUIDs
 using TOML
 using SHA
+using Contexts
 
 export DataSet, dataset, @datafunc, @datarun
 export Blob, BlobTree, newfile, newdir
@@ -516,41 +517,150 @@ function Base.open(f::Function, as_type, dataset::DataSet)
     end
 end
 
-# For convenience, this non-scoped open() just returns the data handle as
-# opened. See check_scoped_open for a way to help users avoid errors when using
-# this (ie, if `identity` is not a valid argument to open() because resources
-# would be closed before it returns).
+# Option 1
 #
-# FIXME: Consider removing this. It should likely be replaced with `load()`, in
-# analogy to FileIO.jl's load operation:
-# * `load()` is "load the entire file into memory as such-and-such type"
-# * `open()` is "open this resource, and run some function while it's open"
-Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
+# Attempt to use finalizers and the "async trick" to recover the resource from
+# inside a do block.
+#
+# Problems:
+# * The async stack may contain a reference to the resource, so it may never
+#   get finalized.
+# * The returned resource must be mutable to attach a finalizer to it.
 
-"""
-    check_scoped_open(func, as_type)
-
-Call `check_scoped_open(func, as_type) in your implementation of `open(func,
-as_type, data)` if you clean up or `close()` resources by the time `open()`
-returns.
-
-That is, if the unscoped form `use(open(AsType, data))` is invalid and the
-following scoped form required:
-
-```
-open(AsType, data) do x
-    use(x)
+#=
+function Base.open(as_type, dataset::DataSet)
+    storage_config = dataset.storage
+    driver = _drivers[storage_config["driver"]]
+    ch = Channel()
+    @async try
+        driver(storage_config, dataset) do storage
+            open(as_type, storage) do x
+                put!(ch, x)
+                if needs_finalizer(x)
+                    ch2 = Channel(1)
+                    finalizer(x) do _
+                        put!(ch2, true)
+                    end
+                    # This is pretty delicate — it won't work if the compiler
+                    # retains a reference to `x` due to its existence in local
+                    # scope.
+                    #
+                    # Likely, it depends on
+                    # - inlining the current closure into open()
+                    # - Assuming that the implementation of open() itself
+                    #   doesn't keep a reference to x.
+                    # - Assuming that the compiler (or interpreter) doesn't
+                    #   keep any stray references elsewhere.
+                    #
+                    # In all, it seems like this can't be reliable in general.
+                    x = nothing
+                    take!(ch2)
+                end
+            end
+        end
+        @info "Done"
+    catch exc
+        put!(ch, exc)
+    end
+    y = take!(ch)
+    if y isa Exception
+        throw(y)
+    end
+    y
 end
-```
 
-The dicotomy of resource handling techniques in `open()` are due to an
-unresolved language design problem of how resource handling and cleanup should
-work (see https://github.com/JuliaLang/julia/issues/7721).
-"""
-check_scoped_open(func, as_type) = nothing
+needs_finalizer(x) = false
+needs_finalizer(x::IO) = true
 
-function check_scoped_open(func::typeof(identity), as_type)
-    throw(ArgumentError("You must use the scoped form `open(your_function, AsType, data)` to open as type $as_type"))
+=#
+
+# Option 2
+# 
+# Attempt to return both the object-of-interest as well as a resource handle
+# from open()
+#
+# Problem:
+# * The user doesn't care about the handle! Now they've got to unpack it...
+
+#=
+struct NullResource
+end
+
+Base.close(rc::NullResource) = nothing
+Base.wait(rc::NullResource) = nothing
+
+struct ResourceControl
+    cond::Threads.Condition
+end
+
+ResourceControl() = ResourceControl(Threads.Condition())
+
+Base.close(rc::ResourceControl) = lock(()->notify(rc.cond), rc.cond)
+Base.wait(rc::ResourceControl) = lock(()->wait(rc.cond), rc.cond)
+
+function _open(as_type, dataset::DataSet)
+    storage_config = dataset.storage
+    driver = _drivers[storage_config["driver"]]
+    ch = Channel()
+    @async try
+        driver(storage_config, dataset) do storage
+            open(as_type, storage) do x
+                rc = needs_finalizer(x) ? ResourceControl() : NullResource()
+                put!(ch, (x,rc))
+                wait(rc)
+            end
+        end
+        @info "Done"
+    catch exc
+        put!(ch, exc)
+    end
+    y = take!(ch)
+    if y isa Exception
+        throw(y)
+    end
+    y
+end
+
+
+y = open(foo)!
+
+# ... means
+
+y,z = open_(foo)
+finalizer(_->close(z), y)
+=#
+
+# Option 3:
+#
+# Context-passing as in Contexts.jl
+#
+# Looks pretty good!
+
+@! function Base.open(dataset::DataSet)
+    storage_config = dataset.storage
+    driver = _drivers[storage_config["driver"]]
+    # Use `enter_do` because drivers don't yet use the Contexts.jl mechanism
+    (storage,) = @! enter_do(driver, storage_config, dataset)
+    storage
+end
+
+@! function Base.open(as_type, dataset::DataSet)
+    storage = @! open(dataset)
+    @! open(as_type, storage)
+end
+
+# Option 4:
+#
+# Deprecate open() and only supply load()
+#
+# Problems:
+# * Not exactly clear where one ends and the other begins.
+
+# All this, in order to deprecate the following function:
+
+function Base.open(as_type, conf::DataSet)
+    Base.depwarn("`open(as_type, dataset::DataSet)` is deprecated. Use @! open(as_type, dataset) instead", :open)
+    @! open(as_type, conf)
 end
 
 # Application entry points
