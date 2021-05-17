@@ -134,6 +134,8 @@ end
 
 Blob(root) = Blob(root, RelPath())
 
+_root_resource(b::Blob) = b.root
+
 Base.basename(file::Blob) = basename(file.path)
 Base.abspath(file::Blob) = AbsPath(file.root, file.path)
 Base.isdir(file::Blob) = false
@@ -174,10 +176,11 @@ function Base.open(f::Function, ::Type{T}, file::Blob; kws...) where {T}
     open(f, T, file.root, file.path; kws...)
 end
 
-# Deprecated unscoped form of open
+# Unscoped form of open for Blob
 function Base.open(::Type{T}, file::Blob; kws...) where {T}
-    Base.depwarn("`open(T,::Blob)` is deprecated. Use `@! open(T, ::Blob)` instead.")
-    open(identity, T, file; kws...)
+    call_with_finalized_context() do ctx
+        open(ctx, T, file; kws...)
+    end
 end
 
 # Contexts.jl - based versions of the above.
@@ -267,6 +270,8 @@ struct BlobTree{Root} <: AbstractBlobTree
 end
 
 BlobTree(root) = BlobTree(root, RelPath())
+
+_root_resource(b::BlobTree) = b.root
 
 function AbstractTrees.printnode(io::IO, tree::BlobTree)
     print(io, "📂 ",  basename(tree))

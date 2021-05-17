@@ -517,125 +517,6 @@ function Base.open(f::Function, as_type, dataset::DataSet)
     end
 end
 
-# Option 1
-#
-# Attempt to use finalizers and the "async trick" to recover the resource from
-# inside a do block.
-#
-# Problems:
-# * The async stack may contain a reference to the resource, so it may never
-#   get finalized.
-# * The returned resource must be mutable to attach a finalizer to it.
-
-#=
-function Base.open(as_type, dataset::DataSet)
-    storage_config = dataset.storage
-    driver = _drivers[storage_config["driver"]]
-    ch = Channel()
-    @async try
-        driver(storage_config, dataset) do storage
-            open(as_type, storage) do x
-                put!(ch, x)
-                if needs_finalizer(x)
-                    ch2 = Channel(1)
-                    finalizer(x) do _
-                        put!(ch2, true)
-                    end
-                    # This is pretty delicate — it won't work if the compiler
-                    # retains a reference to `x` due to its existence in local
-                    # scope.
-                    #
-                    # Likely, it depends on
-                    # - inlining the current closure into open()
-                    # - Assuming that the implementation of open() itself
-                    #   doesn't keep a reference to x.
-                    # - Assuming that the compiler (or interpreter) doesn't
-                    #   keep any stray references elsewhere.
-                    #
-                    # In all, it seems like this can't be reliable in general.
-                    x = nothing
-                    take!(ch2)
-                end
-            end
-        end
-        @info "Done"
-    catch exc
-        put!(ch, exc)
-    end
-    y = take!(ch)
-    if y isa Exception
-        throw(y)
-    end
-    y
-end
-
-needs_finalizer(x) = false
-needs_finalizer(x::IO) = true
-
-=#
-
-# Option 2
-# 
-# Attempt to return both the object-of-interest as well as a resource handle
-# from open()
-#
-# Problem:
-# * The user doesn't care about the handle! Now they've got to unpack it...
-
-#=
-struct NullResource
-end
-
-Base.close(rc::NullResource) = nothing
-Base.wait(rc::NullResource) = nothing
-
-struct ResourceControl
-    cond::Threads.Condition
-end
-
-ResourceControl() = ResourceControl(Threads.Condition())
-
-Base.close(rc::ResourceControl) = lock(()->notify(rc.cond), rc.cond)
-Base.wait(rc::ResourceControl) = lock(()->wait(rc.cond), rc.cond)
-
-function _open(as_type, dataset::DataSet)
-    storage_config = dataset.storage
-    driver = _drivers[storage_config["driver"]]
-    ch = Channel()
-    @async try
-        driver(storage_config, dataset) do storage
-            open(as_type, storage) do x
-                rc = needs_finalizer(x) ? ResourceControl() : NullResource()
-                put!(ch, (x,rc))
-                wait(rc)
-            end
-        end
-        @info "Done"
-    catch exc
-        put!(ch, exc)
-    end
-    y = take!(ch)
-    if y isa Exception
-        throw(y)
-    end
-    y
-end
-
-
-y = open(foo)!
-
-# ... means
-
-y,z = open_(foo)
-finalizer(_->close(z), y)
-=#
-
-# Option 3:
-#
-# Context-passing as in Contexts.jl
-#
-# Looks pretty good!
-
 @! function Base.open(dataset::DataSet)
     storage_config = dataset.storage
     driver = _drivers[storage_config["driver"]]
@@ -649,18 +530,50 @@ end
     @! open(as_type, storage)
 end
 
-# Option 4:
-#
-# Deprecate open() and only supply load()
-#
-# Problems:
-# * Not exactly clear where one ends and the other begins.
+# TODO:
+#  Consider making a distinction between open() and load().
 
-# All this, in order to deprecate the following function:
+# Find a field of an immutable type where a finalizer can be safely attached by
+# proxy. This allows us to keep `Blob` and `BlobTree` as immutable wrappers.
+_root_resource(x) = x
 
-function Base.open(as_type, conf::DataSet)
-    Base.depwarn("`open(as_type, dataset::DataSet)` is deprecated. Use @! open(as_type, dataset) instead", :open)
-    @! open(as_type, conf)
+# Call `result = f(ctx::AbstractContext)`, and attach the cleanup of `ctx` to
+# the finalizer of `_root_resource(result)`.
+#
+# This allows us to implement the unscoped form of open() and defer resource
+# cleanup to finalization time rather than a restricted or global context
+# scope.
+function call_with_finalized_context(f::Function)
+    ctx = Contexts.Context(false)
+    result = try
+        f(ctx)
+    catch
+        Contexts.cleanup!(ctx)
+        rethrow()
+    end
+    finalizer(_root_resource(result)) do _
+        # Must be async, as the finalizer itself isn't allowed to task switch
+        # and context cleanup may involve several task-switchy things
+        @async try
+            Contexts.cleanup!(ctx)
+        catch exc
+            @error "Error cleaning up context" exception=(exc, catch_backtrace())
+            rethrow()
+        end
+    end
+    result
+end
+
+function Base.open(dataset::DataSet)
+    call_with_finalized_context() do ctx
+        open(ctx, dataset)
+    end
+end
+
+function Base.open(as_type, dataset::DataSet)
+    call_with_finalized_context() do ctx
+        open(ctx, as_type, dataset)
+    end
 end
 
 # Application entry points
