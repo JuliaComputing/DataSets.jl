@@ -127,14 +127,12 @@ mapped into the program as an `IO` byte stream, or interpreted as a `String`.
 
 Blobs can be arranged into hierarchies "directories" via the `BlobTree` type.
 """
-struct Blob{Root}
+mutable struct Blob{Root}
     root::Root
     path::RelPath
 end
 
 Blob(root) = Blob(root, RelPath())
-
-_root_resource(b::Blob) = b.root
 
 Base.basename(file::Blob) = basename(file.path)
 Base.abspath(file::Blob) = AbsPath(file.root, file.path)
@@ -150,7 +148,7 @@ function AbstractTrees.printnode(io::IO, file::Blob)
     print(io, "📄 ",  basename(file))
 end
 
-# Opening as Vector{UInt8} or as String uses IO interface
+# Opening as Vector{UInt8} or as String defers to IO interface
 function Base.open(f::Function, ::Type{Vector{UInt8}}, file::Blob)
     open(IO, file.root, file.path) do io
         f(read(io)) # TODO: use Mmap?
@@ -176,14 +174,7 @@ function Base.open(f::Function, ::Type{T}, file::Blob; kws...) where {T}
     open(f, T, file.root, file.path; kws...)
 end
 
-# Unscoped form of open for Blob
-function Base.open(::Type{T}, file::Blob; kws...) where {T}
-    call_with_finalized_context() do ctx
-        open(ctx, T, file; kws...)
-    end
-end
-
-# Contexts.jl - based versions of the above.
+# ResourceContexts.jl - based versions of the above.
 
 @! function Base.open(::Type{Vector{UInt8}}, file::Blob)
     @context begin
@@ -211,6 +202,14 @@ end
 # open with other types T defers to the underlying storage system
 @! function Base.open(::Type{T}, file::Blob; kws...) where {T}
     @! open(T, file.root, file.path; kws...)
+end
+
+# Unscoped form of open for Blob
+function Base.open(::Type{T}, blob::Blob; kws...) where {T}
+    @context begin
+        result = @! open(T, blob; kws...)
+        @! ResourceContexts.detach_context_cleanup(result)
+    end
 end
 
 # read() is also supported for `Blob`s
@@ -264,14 +263,12 @@ julia> tree[path"csvset"]
  📄 2.csv
 ```
 """
-struct BlobTree{Root} <: AbstractBlobTree
+mutable struct BlobTree{Root} <: AbstractBlobTree
     root::Root
     path::RelPath
 end
 
 BlobTree(root) = BlobTree(root, RelPath())
-
-_root_resource(b::BlobTree) = b.root
 
 function AbstractTrees.printnode(io::IO, tree::BlobTree)
     print(io, "📂 ",  basename(tree))

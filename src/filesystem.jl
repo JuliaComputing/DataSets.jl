@@ -57,7 +57,7 @@ end
 Base.readdir(root::AbstractFileSystemRoot, path::RelPath) = readdir(sys_abspath(root, path))
 
 #--------------------------------------------------
-mutable struct FileSystemRoot <: AbstractFileSystemRoot
+struct FileSystemRoot <: AbstractFileSystemRoot
     path::String
     read::Bool
     write::Bool

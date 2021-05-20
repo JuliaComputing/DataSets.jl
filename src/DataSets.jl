@@ -3,7 +3,7 @@ module DataSets
 using UUIDs
 using TOML
 using SHA
-using Contexts
+using ResourceContexts
 
 export DataSet, dataset, @datafunc, @datarun
 export Blob, BlobTree, newfile, newdir
@@ -509,6 +509,10 @@ function add_storage_driver((name,opener)::Pair)
     _drivers[name] = opener
 end
 
+#-------------------------------------------------------------------------------
+# Functions for opening datasets
+
+# do-block form of open()
 function Base.open(f::Function, as_type, dataset::DataSet)
     storage_config = dataset.storage
     driver = _drivers[storage_config["driver"]]
@@ -517,10 +521,11 @@ function Base.open(f::Function, as_type, dataset::DataSet)
     end
 end
 
+# Contexts-based form of open()
 @! function Base.open(dataset::DataSet)
     storage_config = dataset.storage
     driver = _drivers[storage_config["driver"]]
-    # Use `enter_do` because drivers don't yet use the Contexts.jl mechanism
+    # Use `enter_do` because drivers don't yet use the ResourceContexts.jl mechanism
     (storage,) = @! enter_do(driver, storage_config, dataset)
     storage
 end
@@ -533,49 +538,22 @@ end
 # TODO:
 #  Consider making a distinction between open() and load().
 
-# Find a field of an immutable type where a finalizer can be safely attached by
-# proxy. This allows us to keep `Blob` and `BlobTree` as immutable wrappers.
-_root_resource(x) = x
-
-# Call `result = f(ctx::AbstractContext)`, and attach the cleanup of `ctx` to
-# the finalizer of `_root_resource(result)`.
-#
-# This allows us to implement the unscoped form of open() and defer resource
-# cleanup to finalization time rather than a restricted or global context
-# scope.
-function call_with_finalized_context(f::Function)
-    ctx = Contexts.Context(false)
-    result = try
-        f(ctx)
-    catch
-        Contexts.cleanup!(ctx)
-        rethrow()
-    end
-    finalizer(_root_resource(result)) do _
-        # Must be async, as the finalizer itself isn't allowed to task switch
-        # and context cleanup may involve several task-switchy things
-        @async try
-            Contexts.cleanup!(ctx)
-        catch exc
-            @error "Error cleaning up context" exception=(exc, catch_backtrace())
-            rethrow()
-        end
-    end
-    result
-end
-
+# Finalizer-based version of open()
 function Base.open(dataset::DataSet)
-    call_with_finalized_context() do ctx
-        open(ctx, dataset)
+    @context begin
+        result = @! open(dataset)
+        @! ResourceContexts.detach_context_cleanup(result)
     end
 end
 
 function Base.open(as_type, dataset::DataSet)
-    call_with_finalized_context() do ctx
-        open(ctx, as_type, dataset)
+    @context begin
+        result = @! open(as_type, dataset)
+        @! ResourceContexts.detach_context_cleanup(result)
     end
 end
 
+#-------------------------------------------------------------------------------
 # Application entry points
 include("entrypoint.jl")
 

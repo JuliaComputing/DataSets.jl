@@ -1,6 +1,7 @@
 using DataSets
 using Test
 using UUIDs
+using ResourceContexts
 
 using DataSets: FileSystemRoot
 
@@ -37,21 +38,48 @@ end
     @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
 end
 
+@testset "open() for DataSet" begin
+    proj = DataSets.load_project("Data.toml")
+
+    text_data = dataset(proj, "a_text_file")
+    @test open(text_data) isa Blob
+    @test read(open(text_data), String) == "Hello world!\n"
+    @context begin
+        @test read(@!(open(text_data)), String) == "Hello world!\n"
+    end
+
+    tree_data = dataset(proj, "a_tree_example")
+    @test open(tree_data) isa BlobTree
+    @context begin
+        @test @!(open(tree_data)) isa BlobTree
+        tree = @! open(tree_data)
+        @test readdir(tree) == ["1.csv", "2.csv"]
+    end
+end
+
 #-------------------------------------------------------------------------------
-@testset "open() functions" begin
+@testset "open() for Blob and BlobTree" begin
     blob = Blob(FileSystemRoot("data/file.txt"))
     @test        open(identity, String, blob)         == "Hello world!\n"
     @test String(open(identity, Vector{UInt8}, blob)) == "Hello world!\n"
     @test open(io->read(io,String), IO, blob)         == "Hello world!\n"
-    @test open(io->read(io,String), IO, blob)         == "Hello world!\n"
     @test open(identity, Blob, blob) === blob
-    # Unscoped form for types which support it.
+    # Unscoped forms
     @test open(String, blob)                == "Hello world!\n"
     @test String(open(Vector{UInt8}, blob)) == "Hello world!\n"
-    @test_throws ArgumentError("You must use the scoped form `open(your_function, AsType, data)` to open as type IO") open(IO, blob)
+    @test read(open(IO, blob), String)      == "Hello world!\n"
 
     tree = BlobTree(FileSystemRoot("data"))
     @test open(identity, BlobTree, tree) === tree
+
+    # Context-based forms
+    @context begin
+        @test @!(open(String, blob))               == "Hello world!\n"
+        @test String(@! open(Vector{UInt8}, blob)) == "Hello world!\n"
+        @test read(@!(open(IO, blob)), String)     == "Hello world!\n"
+        @test @!(open(Blob, blob))                 === blob
+        @test @!(open(BlobTree, tree))             === tree
+    end
 end
 
 #-------------------------------------------------------------------------------

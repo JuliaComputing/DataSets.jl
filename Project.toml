@@ -5,7 +5,7 @@ version = "0.2.2"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-Contexts = "8d208092-d35c-4dd3-a0d7-8325f9cce6b4"
+ResourceContexts = "8d208092-d35c-4dd3-a0d7-8325f9cce6b4"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 ReplMaker = "b873ce64-0db9-51f5-a568-4457d8e49576"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
