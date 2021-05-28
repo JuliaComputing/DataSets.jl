@@ -61,21 +61,38 @@ description = &quot;A text file containing the standard greeting&quot;
 [storage]
 driver = &quot;FileSystem&quot;
 type = &quot;Blob&quot;
-path = &quot;.../DataSets/docs/src/data/file.txt&quot;</code></pre><h2 id="Loading-Data"><a class="docs-heading-anchor" href="#Loading-Data">Loading Data</a><a id="Loading-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Loading-Data" title="Permalink"></a></h2><p>To load data, call the <code>open()</code> function on the <code>DataSet</code> and pass the desired Julia type which will be returned. For example, to read the dataset named <code>&quot;a_text_file&quot;</code> as a <code>String</code>,</p><pre><code class="language-julia-repl">julia&gt; open(String, dataset(&quot;a_text_file&quot;))
-&quot;Hello world!\n&quot;</code></pre><p>It&#39;s also possible to open this data as an <code>IO</code> stream, in which case the do block form should be used:</p><pre><code class="language-julia-repl">julia&gt; open(IO, dataset(&quot;a_text_file&quot;)) do io
+path = &quot;.../DataSets/docs/src/data/file.txt&quot;</code></pre><h2 id="Loading-Data"><a class="docs-heading-anchor" href="#Loading-Data">Loading Data</a><a id="Loading-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Loading-Data" title="Permalink"></a></h2><p>You can call <code>open()</code> on a DataSet to inspect the data inside.  <code>open()</code> will return the <a href="../reference/#DataSets.Blob"><code>Blob</code></a> and <a href="../reference/#DataSets.BlobTree"><code>BlobTree</code></a> types for local files and directories on disk. For example,</p><pre><code class="language-julia-repl">julia&gt; open(dataset(&quot;a_text_file&quot;))
+📄  @ .../DataSets/docs/src/data/file.txt
+
+julia&gt; open(dataset(&quot;a_tree_example&quot;))
+📂 Tree  @ .../DataSets/docs/src/data/csvset
+ 📄 1.csv
+ 📄 2.csv</code></pre><p>Use the form <code>open(T, dataset)</code> to read the data as a specific type. <code>Blob</code> data can be opened as <code>String</code>, <code>IO</code>, or <code>Vector{UInt8}</code>, depending on your needs:</p><pre><code class="language-julia-repl">julia&gt; io = open(IO, dataset(&quot;a_text_file&quot;))
+IOStream(&lt;file .../DataSets/docs/src/data/file.txt&gt;)
+
+julia&gt; read(io, String)
+&quot;Hello world!\n&quot;
+
+julia&gt; buf = open(Vector{UInt8}, dataset(&quot;a_text_file&quot;));
+
+julia&gt; String(buf)
+&quot;Hello world!\n&quot;
+
+julia&gt; open(String, dataset(&quot;a_text_file&quot;))
+&quot;Hello world!\n&quot;</code></pre><p>To ensure the dataset is closed again in a timely way (freeing any resources such as file handles), you should use the scoped form, for example:</p><pre><code class="language-julia-repl">julia&gt; open(IO, dataset(&quot;a_text_file&quot;)) do io
            content = read(io, String)
            @show content
            nothing
        end
-content = &quot;Hello world!\n&quot;</code></pre><p>Let&#39;s also inspect the tree example using the tree data type <a href="../reference/#DataSets.BlobTree"><code>BlobTree</code></a>. Such data trees can be indexed with path components to get at the file <a href="../reference/#DataSets.Blob"><code>Blob</code></a>s inside, which in turn can be <code>open</code>ed to retrieve the data.</p><pre><code class="language-julia-repl">julia&gt; tree = open(BlobTree, dataset(&quot;a_tree_example&quot;))
+content = &quot;Hello world!\n&quot;</code></pre><p>Let&#39;s look at some tree-like data which is represented on local disk as a folder or directory. Tree data is opened in Julia as the <a href="../reference/#DataSets.BlobTree"><code>BlobTree</code></a> type and can be indexed with path components to get at the file <a href="../reference/#DataSets.Blob"><code>Blob</code></a>s inside. In turn, we can <code>open()</code> one of the file blobs and look at the data contained within.</p><pre><code class="language-julia-repl">julia&gt; tree = open(BlobTree, dataset(&quot;a_tree_example&quot;))
 📂 Tree  @ .../DataSets/docs/src/data/csvset
  📄 1.csv
  📄 2.csv
 
 julia&gt; tree[&quot;1.csv&quot;]
-📄 1.csv @ .../DataSets/test/data/csvset
+📄 1.csv @ .../DataSets/docs/src/data/csvset
 
-julia&gt; Text(open(String, tree[&quot;1.csv&quot;]))
+julia&gt; open(String, tree[&quot;1.csv&quot;]) |&gt; Text
 Name,Age
 &quot;Aaron&quot;,23
 &quot;Harry&quot;,42</code></pre><h2 id="Program-Entry-Points"><a class="docs-heading-anchor" href="#Program-Entry-Points">Program Entry Points</a><a id="Program-Entry-Points-1"></a><a class="docs-heading-anchor-permalink" href="#Program-Entry-Points" title="Permalink"></a></h2><p>Rather than manually using the <code>open()</code> functions as shown above, the <code>@datafunc</code> macro lets you define entry points where <code>DataSet</code>s will be mapped into your program.</p><p>For example, here we define an entry point called <code>main</code> which takes</p><ul><li>DataSet type <code>Blob</code>, presenting it as a <code>String</code> within the program</li><li>DataSet type <code>BlobTree</code>, presenting it as a <code>BlobTree</code> within the program</li></ul><p>The <code>@datarun</code> macro allows you to call such program entry points, extracting named data sets from a given project.</p><pre><code class="language-julia-repl">julia&gt; @datafunc function main(x::Blob=&gt;String, t::BlobTree=&gt;BlobTree)
@@ -88,4 +105,4 @@ main (generic function with 2 methods)
 
 julia&gt; @datarun main(&quot;a_text_file&quot;, &quot;a_tree_example&quot;);
 x = &quot;Hello world!\n&quot;
-csv_data = &quot;Name,Age\n\&quot;Aaron\&quot;,23\n\&quot;Harry\&quot;,42\n&quot;</code></pre><p>In a given program it&#39;s possible to have multiple entry points by simply defining multiple <code>@datafunc</code> implementations. In this case <code>@datarun</code> will dispatch to the entry point with the matching <code>DataSet</code> type.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../reference/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Friday 14 May 2021 04:48">Friday 14 May 2021</span>. Using Julia version 1.6.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+csv_data = &quot;Name,Age\n\&quot;Aaron\&quot;,23\n\&quot;Harry\&quot;,42\n&quot;</code></pre><p>In a given program it&#39;s possible to have multiple entry points by simply defining multiple <code>@datafunc</code> implementations. In this case <code>@datarun</code> will dispatch to the entry point with the matching <code>DataSet</code> type.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../reference/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Friday 28 May 2021 23:53">Friday 28 May 2021</span>. Using Julia version 1.6.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
