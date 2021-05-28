@@ -16,6 +16,7 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 AbstractTrees = "0.3"
 ReplMaker = "0.2"
 TOML = "1"
+ResourceContexts = "0.1"
 julia = "1.5"
 
 [extras]
