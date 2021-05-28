@@ -3,6 +3,7 @@ module DataSets
 using UUIDs
 using TOML
 using SHA
+using ResourceContexts
 
 export DataSet, dataset, @datafunc, @datarun
 export Blob, BlobTree, newfile, newdir
@@ -508,6 +509,10 @@ function add_storage_driver((name,opener)::Pair)
     _drivers[name] = opener
 end
 
+#-------------------------------------------------------------------------------
+# Functions for opening datasets
+
+# do-block form of open()
 function Base.open(f::Function, as_type, dataset::DataSet)
     storage_config = dataset.storage
     driver = _drivers[storage_config["driver"]]
@@ -516,43 +521,39 @@ function Base.open(f::Function, as_type, dataset::DataSet)
     end
 end
 
-# For convenience, this non-scoped open() just returns the data handle as
-# opened. See check_scoped_open for a way to help users avoid errors when using
-# this (ie, if `identity` is not a valid argument to open() because resources
-# would be closed before it returns).
-#
-# FIXME: Consider removing this. It should likely be replaced with `load()`, in
-# analogy to FileIO.jl's load operation:
-# * `load()` is "load the entire file into memory as such-and-such type"
-# * `open()` is "open this resource, and run some function while it's open"
-Base.open(as_type, conf::DataSet) = open(identity, as_type, conf)
-
-"""
-    check_scoped_open(func, as_type)
-
-Call `check_scoped_open(func, as_type) in your implementation of `open(func,
-as_type, data)` if you clean up or `close()` resources by the time `open()`
-returns.
-
-That is, if the unscoped form `use(open(AsType, data))` is invalid and the
-following scoped form required:
-
-```
-open(AsType, data) do x
-    use(x)
-end
-```
-
-The dicotomy of resource handling techniques in `open()` are due to an
-unresolved language design problem of how resource handling and cleanup should
-work (see https://github.com/JuliaLang/julia/issues/7721).
-"""
-check_scoped_open(func, as_type) = nothing
-
-function check_scoped_open(func::typeof(identity), as_type)
-    throw(ArgumentError("You must use the scoped form `open(your_function, AsType, data)` to open as type $as_type"))
+# Contexts-based form of open()
+@! function Base.open(dataset::DataSet)
+    storage_config = dataset.storage
+    driver = _drivers[storage_config["driver"]]
+    # Use `enter_do` because drivers don't yet use the ResourceContexts.jl mechanism
+    (storage,) = @! enter_do(driver, storage_config, dataset)
+    storage
 end
 
+@! function Base.open(as_type, dataset::DataSet)
+    storage = @! open(dataset)
+    @! open(as_type, storage)
+end
+
+# TODO:
+#  Consider making a distinction between open() and load().
+
+# Finalizer-based version of open()
+function Base.open(dataset::DataSet)
+    @context begin
+        result = @! open(dataset)
+        @! ResourceContexts.detach_context_cleanup(result)
+    end
+end
+
+function Base.open(as_type, dataset::DataSet)
+    @context begin
+        result = @! open(as_type, dataset)
+        @! ResourceContexts.detach_context_cleanup(result)
+    end
+end
+
+#-------------------------------------------------------------------------------
 # Application entry points
 include("entrypoint.jl")
 

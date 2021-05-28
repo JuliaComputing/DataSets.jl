@@ -127,7 +127,7 @@ mapped into the program as an `IO` byte stream, or interpreted as a `String`.
 
 Blobs can be arranged into hierarchies "directories" via the `BlobTree` type.
 """
-struct Blob{Root}
+mutable struct Blob{Root}
     root::Root
     path::RelPath
 end
@@ -148,7 +148,7 @@ function AbstractTrees.printnode(io::IO, file::Blob)
     print(io, "📄 ",  basename(file))
 end
 
-# Opening as Vector{UInt8} or as String uses IO interface
+# Opening as Vector{UInt8} or as String defers to IO interface
 function Base.open(f::Function, ::Type{Vector{UInt8}}, file::Blob)
     open(IO, file.root, file.path) do io
         f(read(io)) # TODO: use Mmap?
@@ -174,9 +174,42 @@ function Base.open(f::Function, ::Type{T}, file::Blob; kws...) where {T}
     open(f, T, file.root, file.path; kws...)
 end
 
-# Unscoped form of open
-function Base.open(::Type{T}, file::Blob; kws...) where {T}
-    open(identity, T, file; kws...)
+# ResourceContexts.jl - based versions of the above.
+
+@! function Base.open(::Type{Vector{UInt8}}, file::Blob)
+    @context begin
+        # TODO: use Mmap?
+        read(@! open(IO, file.root, file.path))
+    end
+end
+
+@! function Base.open(::Type{String}, file::Blob)
+    @context begin
+        read(@!(open(IO, file.root, file.path)), String)
+    end
+end
+
+# Default open-type for Blob is IO
+@! function Base.open(file::Blob; kws...)
+    @! open(IO, file.root, file.path; kws...)
+end
+
+# Opening Blob as itself is trivial
+@! function Base.open(::Type{Blob}, file::Blob)
+    file
+end
+
+# open with other types T defers to the underlying storage system
+@! function Base.open(::Type{T}, file::Blob; kws...) where {T}
+    @! open(T, file.root, file.path; kws...)
+end
+
+# Unscoped form of open for Blob
+function Base.open(::Type{T}, blob::Blob; kws...) where {T}
+    @context begin
+        result = @! open(T, blob; kws...)
+        @! ResourceContexts.detach_context_cleanup(result)
+    end
 end
 
 # read() is also supported for `Blob`s
@@ -230,7 +263,7 @@ julia> tree[path"csvset"]
  📄 2.csv
 ```
 """
-struct BlobTree{Root} <: AbstractBlobTree
+mutable struct BlobTree{Root} <: AbstractBlobTree
     root::Root
     path::RelPath
 end
@@ -313,6 +346,10 @@ end
 
 function Base.open(f::Function, ::Type{BlobTree}, tree::BlobTree)
     f(tree)
+end
+
+@! function Base.open(::Type{BlobTree}, tree::BlobTree)
+    tree
 end
 
 # Base.open(::Type{T}, file::Blob; kws...) where {T} = open(identity, T, file.root, file.path; kws...)

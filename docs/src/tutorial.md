@@ -10,7 +10,8 @@ end
 DocTestFilters = [
     r"(?<=Project: \[).*$",
     r"path =.*",
-    r"@.*"
+    r"@.*",
+    r"(?<=IOStream\().*",
 ]
 ```
 
@@ -85,17 +86,42 @@ path = ".../DataSets/docs/src/data/file.txt"
 
 ## Loading Data
 
-To load data, call the `open()` function on the `DataSet` and pass the desired
-Julia type which will be returned. For example, to read the dataset named
-`"a_text_file"` as a `String`,
+You can call `open()` on a DataSet to inspect the data inside.  `open()` will
+return the [`Blob`](@ref) and [`BlobTree`](@ref) types for local files and
+directories on disk. For example,
 
 ```jldoctest
+julia> open(dataset("a_text_file"))
+📄  @ .../DataSets/docs/src/data/file.txt
+
+julia> open(dataset("a_tree_example"))
+📂 Tree  @ .../DataSets/docs/src/data/csvset
+ 📄 1.csv
+ 📄 2.csv
+```
+
+Use the form `open(T, dataset)` to read the data as a specific type. `Blob`
+data can be opened as `String`, `IO`, or `Vector{UInt8}`, depending on your
+needs:
+
+```jldoctest
+julia> io = open(IO, dataset("a_text_file"))
+IOStream(<file .../DataSets/docs/src/data/file.txt>)
+
+julia> read(io, String)
+"Hello world!\n"
+
+julia> buf = open(Vector{UInt8}, dataset("a_text_file"));
+
+julia> String(buf)
+"Hello world!\n"
+
 julia> open(String, dataset("a_text_file"))
 "Hello world!\n"
 ```
 
-It's also possible to open this data as an `IO` stream, in which case the do
-block form should be used:
+To ensure the dataset is closed again in a timely way (freeing any resources
+such as file handles), you should use the scoped form, for example:
 
 ```jldoctest
 julia> open(IO, dataset("a_text_file")) do io
@@ -106,10 +132,11 @@ julia> open(IO, dataset("a_text_file")) do io
 content = "Hello world!\n"
 ```
 
-Let's also inspect the tree example using the tree data type
-[`BlobTree`](@ref). Such data trees can be indexed with path components to get
-at the file [`Blob`](@ref)s inside, which in turn can be `open`ed to retrieve
-the data.
+Let's look at some tree-like data which is represented on local disk as a
+folder or directory. Tree data is opened in Julia as the [`BlobTree`](@ref)
+type and can be indexed with path components to get at the file [`Blob`](@ref)s
+inside. In turn, we can `open()` one of the file blobs and look at the data
+contained within.
 
 ```jldoctest
 julia> tree = open(BlobTree, dataset("a_tree_example"))
@@ -118,9 +145,9 @@ julia> tree = open(BlobTree, dataset("a_tree_example"))
  📄 2.csv
 
 julia> tree["1.csv"]
-📄 1.csv @ .../DataSets/test/data/csvset
+📄 1.csv @ .../DataSets/docs/src/data/csvset
 
-julia> Text(open(String, tree["1.csv"]))
+julia> open(String, tree["1.csv"]) |> Text
 Name,Age
 "Aaron",23
 "Harry",42
