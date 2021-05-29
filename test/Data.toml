@@ -23,7 +23,6 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
     # type="text"
     # parameters={encoding="UTF-8"}
 
-
 #--------------------------------------------------
 [[datasets]]
 description="Gzipped CSV example"
@@ -54,4 +53,44 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
     path="@__DIR__/data/csvset"
 
     # TODO: Add data maps here which expose it logically as a single CSV?
+
+
+#--------------------------------------------------
+[[datasets]]
+description="A data blob embedded in the TOML"
+name="embedded_blob"
+uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
+
+    [datasets.storage]
+    driver="TomlDataStorage"
+    type="Blob"
+    data="AAAAAAAARUA="
+
+
+[[datasets]]
+description="A data tree embedded in the TOML"
+name="embedded_tree"
+uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
+
+    [datasets.storage]
+    driver="TomlDataStorage"
+    type="BlobTree"
+
+# TOML.print(Dict("datasets"=>[Dict("storage"=>Dict("data"=>Dict(["d0$i"=>Dict(["$x.txt"=>base64encode("$i $x content") for x in ("a","b")]...) for i in 1:4]...)))]))
+
+        [datasets.storage.data.d01]
+        "b.txt" = "MSBiIGNvbnRlbnQ="
+        "a.txt" = "MSBhIGNvbnRlbnQ="
+
+        [datasets.storage.data.d02]
+        "b.txt" = "MiBiIGNvbnRlbnQ="
+        "a.txt" = "MiBhIGNvbnRlbnQ="
+
+        [datasets.storage.data.d03]
+        "b.txt" = "MyBiIGNvbnRlbnQ="
+        "a.txt" = "MyBhIGNvbnRlbnQ="
+
+        [datasets.storage.data.d04]
+        "b.txt" = "NCBiIGNvbnRlbnQ="
+        "a.txt" = "NCBhIGNvbnRlbnQ="
 

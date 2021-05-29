@@ -4,7 +4,7 @@
 #
 abstract type AbstractFileSystemRoot end
 
-# These underscore functions sys_abspath and sys_joinpath generate/joins OS-specific
+# These functions sys_abspath and sys_joinpath generate/joins OS-specific
 # _local filesystem paths_ out of logical paths. They should be defined only
 # for trees which are rooted in the actual filesystem.
 function sys_abspath(root::AbstractFileSystemRoot, path::RelPath)
@@ -17,30 +17,27 @@ sys_abspath(path::AbsPath) = sys_abspath(path.root, path.path)
 sys_abspath(tree::BlobTree) = sys_abspath(tree.root, tree.path)
 sys_abspath(file::Blob) = sys_abspath(file.root, file.path)
 
+#--------------------------------------------------
+# Storage data interface for trees
+#
+# TODO: Formalize this interface!
+
+## 1. Query
+
 # TODO: would it be better to express the following dispatch in terms of
 # AbsPath{<:AbstractFileSystemRoot} rather than usin double dispatch?
+
 Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(sys_abspath(root, path))
 Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(sys_abspath(root, path))
 Base.ispath(root::AbstractFileSystemRoot, path::RelPath) = ispath(sys_abspath(root, path))
-Base.read(root::AbstractFileSystemRoot, path::RelPath, ::Type{T}) where {T} =
-    read(sys_abspath(root, path), T)
-Base.read(root::AbstractFileSystemRoot, path::RelPath) where {T} =
-    read(sys_abspath(root, path))
 
 Base.summary(io::IO, root::AbstractFileSystemRoot) = print(io, sys_abspath(root))
 
-function Base.open(f::Function, as_type::Type{IO}, root::AbstractFileSystemRoot, path;
-                   kws...)
-    @context f(@! open(as_type, root, path; kws...))
-end
+Base.readdir(root::AbstractFileSystemRoot, path::RelPath) = readdir(sys_abspath(root, path))
 
-@! function Base.open(::Type{IO}, root::AbstractFileSystemRoot, path;
-                      write=false, read=!write, kws...)
-    if !iswriteable(root) && write
-        error("Error writing file at read-only path $path")
-    end
-    @! open(sys_abspath(root, path); read=read, write=write, kws...)
-end
+## 2. Mutation
+#
+# TODO: Likely requires rework!
 
 function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)
     if !iswriteable(root)
@@ -54,7 +51,27 @@ function Base.rm(root::AbstractFileSystemRoot, path::RelPath; kws...)
     rm(sys_abspath(root,path); kws...)
 end
 
-Base.readdir(root::AbstractFileSystemRoot, path::RelPath) = readdir(sys_abspath(root, path))
+#--------------------------------------------------
+# Storage data interface for Blob
+
+# TODO: Make this the generic implementation for AbstractDataStorage
+function Base.open(f::Function, as_type::Type{IO},
+                   root::AbstractFileSystemRoot, path; kws...)
+    @context f(@! open(as_type, root, path; kws...))
+end
+
+@! function Base.open(::Type{IO}, root::AbstractFileSystemRoot, path;
+                      write=false, read=!write, kws...)
+    if !iswriteable(root) && write
+        error("Error writing file at read-only path $path")
+    end
+    @! open(sys_abspath(root, path); read=read, write=write, kws...)
+end
+
+Base.read(root::AbstractFileSystemRoot, path::RelPath, ::Type{T}) where {T} =
+    read(sys_abspath(root, path), T)
+Base.read(root::AbstractFileSystemRoot, path::RelPath) =
+    read(sys_abspath(root, path))
 
 #--------------------------------------------------
 struct FileSystemRoot <: AbstractFileSystemRoot
@@ -72,12 +89,15 @@ iswriteable(root::FileSystemRoot) = root.write
 
 sys_abspath(root::FileSystemRoot) = root.path
 
-# For use outside DataSets, we will assume the special case that abspath() with
-# a RelPath refers to the current working directory on the local system.
-Base.abspath(relpath::RelPath) =
+function Base.abspath(relpath::RelPath)
+    Base.depwarn("""
+        `abspath(::RelPath)` defaults to using `pwd()` as the root of the path
+        but this leads to fragile code so will be removed in the future""",
+        :abspath)
     AbsPath(FileSystemRoot(pwd(); write=true, read=true), relpath)
+end
 
-#--------------------------------------------------
+#-------------------------------------------------------------------------------
 # Infrastructure for a somewhat more functional interface for creating file
 # trees than the fully mutable version we usually use.
 
