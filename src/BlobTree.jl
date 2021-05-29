@@ -204,6 +204,15 @@ end
     @! open(T, file.root, file.path; kws...)
 end
 
+# Fallback implementation of `@! open(T, root, path)` based on enter_do.
+#
+# TODO: Update other backends to avoid calling this; using enter_do is pretty
+# inefficient.
+@! function Base.open(::Type{T}, root, path; kws...) where {T}
+    (res,) = @! enter_do(open, T, root, path; kws...)
+    res
+end
+
 # Unscoped form of open for Blob
 function Base.open(::Type{T}, blob::Blob; kws...) where {T}
     @context begin
