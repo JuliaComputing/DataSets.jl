@@ -4,7 +4,7 @@ using Base64
 Storage driver which keeps the data embedded within the TOML file itself.
 Useful for small amounts of self-contained data.
 
-## Metadata spec:
+## Metadata spec
 
 For Blob:
 ```
@@ -107,20 +107,19 @@ end
 # Connect storage backend
 function connect_toml_data_storage(f, config, dataset)
     type = config["type"]
-    if type ∉ ("Blob", "BlobTree")
-        throw(ArgumentError("DataSet type $type not supported for data embedded in Data.toml"))
-    end
     data = get(config, "data", nothing)
     if type == "Blob"
         if !(data isa AbstractString)
             error("TOML data storage requires string data in the \"storage.data\" key")
         end
         f(Blob(TomlDataStorage(dataset, data)))
-    else
+    elseif type == "BlobTree"
         if !(data isa AbstractDict)
             error("TOML data storage requires a dictionary in the \"storage.data\" key")
         end
         f(BlobTree(TomlDataStorage(dataset, data)))
+    else
+        throw(ArgumentError("DataSet type $type not supported for data embedded in Data.toml"))
     end
 end
 

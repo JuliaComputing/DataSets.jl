@@ -74,6 +74,26 @@ Base.read(root::AbstractFileSystemRoot, path::RelPath) =
     read(sys_abspath(root, path))
 
 #--------------------------------------------------
+"""
+
+## Metadata spec
+
+For Blob:
+```
+    [datasets.storage]
+    driver="FileSystem"
+    type="Blob"
+    path=\$(path_to_file)
+```
+
+For BlobTree:
+```
+    [datasets.storage]
+    driver="FileSystem"
+    type="BlobTree"
+    path=\$(path_to_directory)
+```
+"""
 struct FileSystemRoot <: AbstractFileSystemRoot
     path::String
     read::Bool
