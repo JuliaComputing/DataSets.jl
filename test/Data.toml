@@ -39,9 +39,6 @@ uuid="efde65c3-a898-4ba9-97c1-45dba64b8d46"
     [datasets.layers.parameters]
         delim="\t"
 
-    #[[datasets.layers]]
-    #type = "dataframe"
-
 [[datasets]]
 description="Gzipped CSV example"
 name="table_gzip"
@@ -51,13 +48,6 @@ uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
     driver="FileSystem"
     type="Blob"
     path="@__DIR__/data/people.csv.gz"
-
-    #[[datasets.maps]]
-    #type="GZip"
-    #
-    #[[datasets.maps]]
-    #type="CSV"
-    #parameters={delim=","}
 
     [[datasets.layers]]
     type = "gzip"
