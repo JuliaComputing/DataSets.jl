@@ -5,9 +5,10 @@ version = "0.2.3"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-ResourceContexts = "8d208092-d35c-4dd3-a0d7-8325f9cce6b4"
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 ReplMaker = "b873ce64-0db9-51f5-a568-4457d8e49576"
+ResourceContexts = "8d208092-d35c-4dd3-a0d7-8325f9cce6b4"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
@@ -15,8 +16,8 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 [compat]
 AbstractTrees = "0.3"
 ReplMaker = "0.2"
-TOML = "1"
 ResourceContexts = "0.1"
+TOML = "1"
 julia = "1.5"
 
 [extras]

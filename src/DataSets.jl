@@ -461,7 +461,7 @@ Additional projects may be added or removed from the stack with `pushfirst!`,
 """
 PROJECT = StackedDataProject()
 
-# deprecated.
+# deprecated. TODO: Remove dependency on this from JuliaHub
 _current_project = DataProject()
 
 function __init__()
@@ -562,6 +562,7 @@ include("BlobTree.jl")
 
 # Builtin backends
 include("filesystem.jl")
+include("DataTomlStorage.jl")
 
 # Backends
 # include("ZipTree.jl")

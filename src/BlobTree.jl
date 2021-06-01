@@ -300,6 +300,8 @@ Base.abspath(tree::BlobTree) = AbsPath(tree.root, tree.path)
 function Base.getindex(tree::BlobTree, path::RelPath)
     relpath = joinpath(tree.path, path)
     root = tree.root
+    # TODO: Make this more efficient by moving this work to the storage backend?
+    # Sort of like an equivalent of `stat`?
     if isdir(root, relpath)
         BlobTree(root, relpath)
     elseif isfile(root, relpath)
@@ -316,9 +318,9 @@ function Base.getindex(tree::BlobTree, name::AbstractString)
 end
 
 # We've got a weird mishmash of path vs tree handling here.
-# TODO: Can we refactor this to cleanly separate the filesystem commands (which
-# take abstract paths?) from BlobTree and Blob which act as an abstraction over
-# the filesystem or other storage mechanisms?
+# TODO: Can we refactor this to cleanly separate the filesystem-like commands
+# (which take abstract paths?) from BlobTree and Blob which act as an
+# abstraction over the filesystem or other storage mechanisms?
 function Base.joinpath(tree::BlobTree, r::RelPath)
     AbsPath(tree.root, joinpath(tree.path, r))
 end
@@ -332,6 +334,10 @@ function Base.haskey(tree::BlobTree, name::AbstractString)
 end
 
 function Base.readdir(tree::BlobTree)
+    readdir(tree.root, tree.path)
+end
+
+function Base.keys(tree::BlobTree)
     readdir(tree.root, tree.path)
 end
 
