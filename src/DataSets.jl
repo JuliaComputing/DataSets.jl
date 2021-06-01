@@ -533,9 +533,21 @@ end
     driver = lock(_storage_drivers_lock) do
         _storage_drivers[driver_name]
     end
+
     # Use `enter_do` because drivers don't yet use the ResourceContexts.jl mechanism
-    (storage,) = @! enter_do(driver, storage_config, dataset)
-    storage
+    (data,) = @! enter_do(driver, storage_config, dataset)
+
+    layers_config = get(dataset.conf, "layers", nothing)
+    if !isnothing(layers_config)
+        for layer_config in layers_config
+            layer, mod = load_layer(layer_config)
+            # Want `@! open(layer, mod, data)`, but we need to use invokelatest
+            # instead, hence some reliance on ResourceContexts internals.
+            data = Base.invokelatest(open, var"#context", layer, mod, data)
+        end
+    end
+
+    data
 end
 
 @! function Base.open(as_type, dataset::DataSet)
@@ -578,5 +590,7 @@ include("DataTomlStorage.jl")
 
 # Application-level stuff
 # include("repl.jl")
+
+include("layers.jl")
 
 end

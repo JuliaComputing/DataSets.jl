@@ -25,8 +25,26 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
 #--------------------------------------------------
 [[datasets]]
+description="Simple TSV example"
+name="table_tsv"
+uuid="efde65c3-a898-4ba9-97c1-45dba64b8d46"
+
+    [datasets.storage]
+    driver="FileSystem"
+    type="Blob"
+    path="@__DIR__/data/people.tsv"
+
+    [[datasets.layers]]
+    type = "csv"
+    [datasets.layers.parameters]
+        delim="\t"
+
+    #[[datasets.layers]]
+    #type = "dataframe"
+
+[[datasets]]
 description="Gzipped CSV example"
-name="a_table"
+name="table_gzip"
 uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
     [datasets.storage]
@@ -41,6 +59,24 @@ uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
     #type="CSV"
     #parameters={delim=","}
 
+    [[datasets.layers]]
+    type = "gzip"
+
+    [[datasets.layers]]
+    type = "csv"
+
+[[datasets]]
+description="Arrow example"
+name="table_arrow"
+uuid="e964d100-fef2-45c4-85de-9d8e142f4084"
+
+    [datasets.storage]
+    driver="FileSystem"
+    type="Blob"
+    path="@__DIR__/data/people.arrow"
+
+    [[datasets.layers]]
+    type = "arrow"
 
 #--------------------------------------------------
 [[datasets]]
