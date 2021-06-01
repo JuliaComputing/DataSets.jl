@@ -488,7 +488,8 @@ end
 #-------------------------------------------------------------------------------
 # Storage layer and interface
 
-_drivers = Dict{String,Any}()
+const _storage_drivers_lock = ReentrantLock()
+const _storage_drivers = Dict{String,Any}()
 
 """
     add_storage_driver(driver_name=>storage_opener)
@@ -506,7 +507,9 @@ Packages which define new storage drivers should generally call
 `add_storage_driver()` within their `__init__()` functions.
 """
 function add_storage_driver((name,opener)::Pair)
-    _drivers[name] = opener
+    lock(_storage_drivers_lock) do
+        _storage_drivers[name] = opener
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -515,7 +518,9 @@ end
 # do-block form of open()
 function Base.open(f::Function, as_type, dataset::DataSet)
     storage_config = dataset.storage
-    driver = _drivers[storage_config["driver"]]
+    driver = lock(_storage_drivers_lock) do
+        _storage_drivers[storage_config["driver"]]
+    end
     driver(storage_config, dataset) do storage
         open(f, as_type, storage)
     end
@@ -524,7 +529,10 @@ end
 # Contexts-based form of open()
 @! function Base.open(dataset::DataSet)
     storage_config = dataset.storage
-    driver = _drivers[storage_config["driver"]]
+    driver_name = storage_config["driver"]
+    driver = lock(_storage_drivers_lock) do
+        _storage_drivers[driver_name]
+    end
     # Use `enter_do` because drivers don't yet use the ResourceContexts.jl mechanism
     (storage,) = @! enter_do(driver, storage_config, dataset)
     storage
