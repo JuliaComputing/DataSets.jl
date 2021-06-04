@@ -72,10 +72,31 @@ function _check_keys(config, context, keys)
     end
 end
 
+"""
+    check_dataset_name(name)
+
+Check whether a dataset name is valid. Valid names include start with a letter
+and may contain letters, numbers or `_`. Names may be hieracicial, with pieces
+separated with colons. Examples:
+
+    my_data
+    my_data_1
+    username:data
+    organization:username:data
+"""
 function check_dataset_name(name::AbstractString)
-    # Disallow punctuation in DataSet names for now, as it may be needed as
+    # DataSet names disallow most punctuation for now, as it may be needed as
     # delimiters in data-related syntax (eg, for the data REPL).
-    if !occursin(r"^[[:alpha:]][[:alnum:]_]*$", name)
+    dataset_name_pattern = r"
+        ^
+        [[:alpha:]]
+        (?:
+            [[:alnum:]_]      |
+            : (?=[[:alpha:]])
+        )*
+        $
+        "x
+    if !occursin(dataset_name_pattern, name)
         error("DataSet name must start with a letter, and can only contain letters, numbers or underscores; got \"$name\"")
     end
 end
@@ -158,12 +179,51 @@ To open a directory as a browsable tree object,
 open(BlobTree, dataset("a_tree_example"))
 ```
 """
-function dataset(proj::AbstractDataProject, name::AbstractString)
-    # Non-fancy search... for now :)
-    # In the future, we can consider parsing `name` into a dataset prefix and a
-    # data selector / resource section. Eg a path for BlobTree which gives us a
-    # SubDataSet
-    proj[name]
+function dataset(proj::AbstractDataProject, spec::AbstractString)
+    namestr, pathstr, querystr = split_dataspec(spec)
+
+    query = isnothing(querystr) ?
+            nothing : Dict(split.(split(querystr, '&'), '='))
+
+    dataset = proj[namestr]
+
+    if isnothing(pathstr) && isnothing(query)
+        return dataset
+    end
+
+    # TODO: Enhance dataset with path & query params, pending further
+    # experiments.
+    #=
+    dataset = deepcopy(dataset)
+    params = get!(dataset.conf, "parameters", Dict())
+    if !isnothing(pathstr)
+        params["path"] = haskey(params, "path") ?
+            string(params["path"], '/', pathstr) : pathstr
+    end
+    if !isnothing(query)
+        params["query"] = haskey(params, "query") ?
+            merge(query, params["query"]) : query
+    end
+    =#
+
+    return dataset
+end
+
+function split_dataspec(spec::AbstractString)
+    # Parse as a suffix of URI syntax (without the scheme):
+    # namespaces:name/path?param1=value1&param2=value2
+    m = match(r"
+        ^
+        ((?:[[:alpha:]][[:alnum:]_]*:?)+)  # name  -  a:b:c
+        (?:/([^?]*))?                      # path  -  a/b/c
+        (?:\?(.*))?                        # query -  a=b&c=d
+        $"x,
+        spec)
+    namestr = m[1]
+    pathstr = m[2]
+    querystr = m[3]
+
+    namestr, pathstr, querystr
 end
 
 function Base.haskey(proj::AbstractDataProject, name::AbstractString)
@@ -242,8 +302,29 @@ end
 """
 Current version of the data configuration format, as reflected in the
 Data.toml data_config_version key.
+
+### Version 0 (DataSets <= 0.2.x):
+
+Required structure:
+
+```toml
+data_config_version = 0
+
+[[datasets]]
+name = "alphnumeric and underscore chars"
+uuid = "a uuid"
+
+[datasets.storage]
+    driver = "StorageDriver"
+```
+
+### Version 1 (DataSets 0.3):
+
+Same as version 0, but allows the `:` character in dataset names to serve as a
+namespace separator.
+
 """
-const CURRENT_DATA_CONFIG_VERSION = 0
+const CURRENT_DATA_CONFIG_VERSION = 1
 
 """
     load_project(path; auto_update=false)
