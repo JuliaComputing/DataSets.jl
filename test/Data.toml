@@ -94,3 +94,27 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
         "b.txt" = "NCBiIGNvbnRlbnQ="
         "a.txt" = "NCBhIGNvbnRlbnQ="
 
+#--------------------------------------------------
+[[datasets]]
+description="Test old storage backend API, Blob"
+name="old_backend_blob"
+uuid="785b3cdc-428e-426f-a3f7-3f6ae88a9637"
+
+    [datasets.storage]
+    driver="OldBackendAPI"
+    type="Blob"
+    data="eA=="
+
+[[datasets]]
+description="Test old storage backend API, BlobTree"
+name="old_backend_tree"
+uuid="4af3a8a9-983b-487b-bfd8-804ca50b4a0c"
+
+    [datasets.storage]
+    driver="OldBackendAPI"
+    type="BlobTree"
+
+        [datasets.storage.data]
+        "b.txt" = "Yg=="
+        "a.txt" = "YQ=="
+
