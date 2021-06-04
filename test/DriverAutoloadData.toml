@@ -1,4 +1,4 @@
-data_config_version = 0
+data_config_version = 1
 
 [[datasets]]
 description="Test dynamic loading of drivers"

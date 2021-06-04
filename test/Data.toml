@@ -1,5 +1,5 @@
 # This specifies the version of the Data.toml configuration
-data_config_version=0
+data_config_version=1
 
 # The following is an array of the actual `DataSet`s.
 
@@ -22,6 +22,16 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
     # [[datasets.maps]]
     # type="text"
     # parameters={encoding="UTF-8"}
+
+[[datasets]]
+description="A text file with namespace"
+name="some_namespace/a_text_file"
+uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
+
+    [datasets.storage]
+    driver="FileSystem"
+    type="Blob"
+    path="@__DIR__/data/file.txt"
 
 #--------------------------------------------------
 [[datasets]]
