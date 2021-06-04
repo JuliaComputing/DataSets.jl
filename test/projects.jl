@@ -16,13 +16,13 @@ using DataSets:
     @test isnothing(get(proj, "nonexistent_data", nothing))
 
     # keys
-    @test sort(collect(keys(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree"]
+    @test sort(collect(keys(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
     @test haskey(proj, "a_text_file")
     @test !haskey(proj, "nonexistent_data")
 
     # iteration
-    @test sort(getproperty.(collect(proj), :name)) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree"]
-    @test sort(first.(pairs(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree"]
+    @test sort(getproperty.(collect(proj), :name)) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
+    @test sort(first.(pairs(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
 
     # identity
     @test project_name(proj) == abspath("Data.toml")
@@ -99,7 +99,7 @@ end
     push!(proj, TomlFileDataProject(joinpath(@__DIR__, "active_project", "Data.toml")))
     push!(proj, TomlFileDataProject(joinpath(@__DIR__, "Data.toml")))
 
-    @test sort(collect(keys(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree"]
+    @test sort(collect(keys(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
     # Data "a_text_file" should be found in the first project in the stack,
     # overriding the data of the same name in the second project.
     @test proj["a_text_file"].uuid == UUID("314996ef-12be-40d0-912c-9755af354fdb")
