@@ -1,7 +1,7 @@
 # DataSets
 
-[![Build Status](https://github.com/JuliaComputing/DataSets.jl/workflows/CI/badge.svg)](https://github.com/JuliaComputing/DataSets.jl/actions)
-[![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://juliacomputing.github.io/DataSets.jl/dev)
+[![Version](https://juliahub.com/docs/DataSets/version.svg)](https://juliahub.com/ui/Packages/DataSets/4adr3)
+[![docs latest](https://img.shields.io/badge/docs-latest-blue.svg)](https://juliahub.com/docs/DataSets)
 
 DataSets.jl exists to help manage data and reduce the amount of data wrangling
 code you need to write. It's annoying to write
@@ -19,5 +19,9 @@ to make it easy to *relocate* an algorithm between different data environments
 without code changes. For example from your laptop to the cloud, to another
 user's machine, or to an HPC system.
 
-Read [**the documentation**](https://juliacomputing.github.io/DataSets.jl/dev/)
-for more information.
+Read [**the latest documentation**](https://juliahub.com/docs/DataSets) more information.
+
+### Development
+
+[![docs-dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://juliacomputing.github.io/DataSets.jl/dev)
+[![Build Status](https://github.com/JuliaComputing/DataSets.jl/workflows/CI/badge.svg)](https://github.com/JuliaComputing/DataSets.jl/actions)
