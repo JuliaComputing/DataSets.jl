@@ -321,7 +321,11 @@ function Base.show(io::IO, ::MIME"text/plain", project::AbstractDataProject)
     maxwidth = maximum(textwidth.(first.(sorted)))
     for (i, (name, data)) in enumerate(sorted)
         pad = maxwidth - textwidth(name)
-        print(io, "  ", name, ' '^pad, " => ", data.uuid)
+        storagetype = get(data.storage, "type", nothing)
+        icon = storagetype == "Blob"     ? '📄' :
+               storagetype == "BlobTree" ? '📁' :
+               '❓'
+        print(io, "  ", icon, ' ', name, ' '^pad, " => ", data.uuid)
         if i < length(sorted)
             println(io)
         end
@@ -577,6 +581,6 @@ include("DataTomlStorage.jl")
 # include("GitTree.jl")
 
 # Application-level stuff
-# include("repl.jl")
+include("repl.jl")
 
 end
