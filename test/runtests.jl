@@ -161,6 +161,7 @@ end
     @test isfile(DataSets.sys_abspath(temptree["d1"]["hi_2.txt"]))
 end
 
+include("repl.jl")
 include("projects.jl")
 include("DataTomlStorage.jl")
 include("backend_compat.jl")

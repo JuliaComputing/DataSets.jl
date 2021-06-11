@@ -379,6 +379,8 @@ end
 # API for manipulating the stack.
 Base.push!(stack::StackedDataProject, project) = push!(stack.projects, project)
 Base.pushfirst!(stack::StackedDataProject, project) = pushfirst!(stack.projects, project)
+Base.popfirst!(stack::StackedDataProject) = popfirst!(stack.projects)
+Base.pop!(stack::StackedDataProject) = pop!(stack.projects)
 Base.empty!(stack::StackedDataProject) = empty!(stack.projects)
 
 function Base.show(io::IO, mime::MIME"text/plain", stack::StackedDataProject)
@@ -409,6 +411,14 @@ function expand_project_path(path)
     path
 end
 
+function data_project_from_path(path)
+    if path == "@"
+        project = ActiveDataProject()
+    else
+        project = TomlFileDataProject(expand_project_path(path))
+    end
+end
+
 function create_project_stack(env)
     stack = []
     env_search_path = get(env, "JULIA_DATASETS_PATH", nothing)
@@ -418,11 +428,7 @@ function create_project_stack(env)
         paths = split(env_search_path, Sys.iswindows() ? ';' : ':')
     end
     for path in paths
-        if path == "@"
-            project = ActiveDataProject()
-        else
-            project = TomlFileDataProject(expand_project_path(path))
-        end
+        project = data_project_from_path(path)
         push!(stack, project)
     end
     StackedDataProject(stack)
