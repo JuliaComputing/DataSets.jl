@@ -129,6 +129,16 @@ function complete_command_list(cmd_prefix, commands)
     return completions
 end
 
+function path_str(path_completion)
+    path = REPL.REPLCompletions.completion_text(path_completion)
+    if Sys.iswindows()
+        # On windows, REPLCompletions.complete_path() adds extra escapes for
+        # use within a normal string in the Juila REPL but we don't need those.
+        path = replace(path, "\\\\"=>'\\')
+    end
+    return path
+end
+
 function complete(str_to_complete)
     tokens = split(str_to_complete, r" +", keepempty=true)
     cmd = popfirst!(tokens)
@@ -171,7 +181,7 @@ function complete(str_to_complete)
                 path_prefix = isempty(tokens) ? "" : tokens[1]
                 (path_completions, range, should_complete) =
                     REPL.REPLCompletions.complete_path(path_prefix, length(path_prefix))
-                completions = [REPL.REPLCompletions.completion_text(c) for c in path_completions]
+                completions = [path_str(c) for c in path_completions]
                 return (completions, path_prefix[range], should_complete)
             end
         end

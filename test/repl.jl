@@ -6,7 +6,11 @@ using DataSets.DataREPL: complete, parse_data_repl_cmd
     @test complete("stack ") == (["push ", "pop ", "list "], "", true)
 
     cd(@__DIR__) do
-        @test complete("stack push da") == (["data/"], "da", true)
+        if Sys.iswindows()
+            @test complete("stack push da") == (["data\\"], "da", true)
+        else
+            @test complete("stack push da") == (["data/"], "da", true)
+        end
     end
 end
 
