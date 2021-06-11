@@ -4,6 +4,7 @@ using UUIDs
 using TOML
 using SHA
 using ResourceContexts
+using Base: PkgId
 
 export DataSet, dataset, @datafunc, @datarun
 export Blob, BlobTree, newfile, newdir
@@ -215,6 +216,8 @@ identifier, `nothing` is returned.
 """
 project_name(data_project::AbstractDataProject) = nothing
 
+data_drivers(proj::AbstractDataProject) = []
+
 #-------------------------------------------------------------------------------
 """
     DataProject
@@ -224,11 +227,15 @@ Names are unique within the project.
 """
 struct DataProject <: AbstractDataProject
     datasets::Dict{String,DataSet}
+    drivers::Vector{Dict{String,Any}}
 end
 
-DataProject() = DataProject(Dict{String,DataSet}())
+DataProject() = DataProject(Dict{String,DataSet}(), Vector{Dict{String,Any}}())
 
-DataProject(project::AbstractDataProject) = DataProject(Dict(pairs(project)))
+DataProject(project::AbstractDataProject) = DataProject(Dict(pairs(project)),
+                                                        Vector{Dict{String,Any}}())
+
+data_drivers(project::DataProject) = project.drivers
 
 function _fill_template(toml_path, toml_str)
     # Super hacky templating for paths relative to the toml file.
@@ -275,6 +282,14 @@ function load_project(config::AbstractDict; kws...)
     for dataset_conf in config["datasets"]
         dataset = DataSet(dataset_conf)
         link_dataset(proj, dataset.name => dataset)
+    end
+    if haskey(config, "drivers")
+        _check_keys(config, DataProject, ["drivers"=>AbstractVector])
+        for driver_conf in config["drivers"]
+            _check_keys(driver_conf, DataProject, ["type"=>String, "name"=>String, "module"=>Dict])
+            _check_keys(driver_conf["module"], DataProject, ["name"=>String, "uuid"=>String])
+            push!(proj.drivers, driver_conf)
+        end
     end
     proj
 end
@@ -479,8 +494,18 @@ PROJECT = StackedDataProject()
 # deprecated. TODO: Remove dependency on this from JuliaHub
 _current_project = DataProject()
 
+_isprecompiling() = ccall(:jl_generating_output, Cint, ()) == 1
+
 function __init__()
-    global PROJECT = create_project_stack(ENV)
+    # Triggering Base.require for storage drivers during precompilation should
+    # be unnecessary and can cause problems if those driver modules use
+    # Requires-like code loading.
+    if !_isprecompiling()
+        global PROJECT = create_project_stack(ENV)
+        for proj in PROJECT.projects
+            add_storage_driver(proj)
+        end
+    end
 end
 
 dataset(name) = dataset(PROJECT, name)
@@ -524,6 +549,25 @@ Packages which define new storage drivers should generally call
 function add_storage_driver((name,opener)::Pair)
     lock(_storage_drivers_lock) do
         _storage_drivers[name] = opener
+    end
+end
+
+function add_storage_driver(project::AbstractDataProject)
+    for conf in data_drivers(project)
+        if conf["type"] != "storage"
+            # Anticipate there might be layer drivers too
+            continue
+        end
+        pkgid = PkgId(UUID(conf["module"]["uuid"]), conf["module"]["name"])
+        mod = Base.require(pkgid)
+        driver_name = conf["name"]
+        # Module itself does add_storage_driver() inside its __init__
+        # TODO: Is this a good workflow?
+        lock(_storage_drivers_lock) do
+            get(_storage_drivers, driver_name) do
+                error("Package $pkgid did not provide storage driver $driver_name")
+            end
+        end
     end
 end
 

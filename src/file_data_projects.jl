@@ -118,6 +118,8 @@ end
 
 Base.pairs(proj::AbstractTomlFileDataProject) = pairs(_get_cached(proj))
 
+data_drivers(proj::AbstractTomlFileDataProject) = data_drivers(_get_cached(proj))
+
 #-------------------------------------------------------------------------------
 """
 Data project which automatically updates based on a TOML file on the local
