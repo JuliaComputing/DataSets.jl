@@ -261,7 +261,7 @@ function init_data_repl(; start_key = ">")
                        sticky_mode = true,
                        mode_name = "DataSets",
                        completion_provider = DataCompletionProvider(),
-                       startup_text = true)
+                       startup_text = false)
     nothing
 end
 
