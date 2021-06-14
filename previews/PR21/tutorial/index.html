@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tutorial · DataSets.jl</title><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit">DataSets.jl</span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Introduction</a></li><li class="is-active"><a class="tocitem" href>Tutorial</a><ul class="internal"><li><a class="tocitem" href="#Making-a-Data.toml-file"><span>Making a Data.toml file</span></a></li><li><a class="tocitem" href="#Loading-Data"><span>Loading Data</span></a></li><li><a class="tocitem" href="#Program-Entry-Points"><span>Program Entry Points</span></a></li></ul></li><li><a class="tocitem" href="../reference/">API Reference</a></li><li><a class="tocitem" href="../design/">Design Discussion</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Tutorial</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Tutorial</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/JuliaComputing/DataSets.jl/blob/master/docs/src/tutorial.md#L" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Tutorial"><a class="docs-heading-anchor" href="#Tutorial">Tutorial</a><a id="Tutorial-1"></a><a class="docs-heading-anchor-permalink" href="#Tutorial" title="Permalink"></a></h1><h2 id="Making-a-Data.toml-file"><a class="docs-heading-anchor" href="#Making-a-Data.toml-file">Making a Data.toml file</a><a id="Making-a-Data.toml-file-1"></a><a class="docs-heading-anchor-permalink" href="#Making-a-Data.toml-file" title="Permalink"></a></h2><p>Suppose you had some data which you wanted to access located in your Julia home directory at <code>~/.julia/datasets</code> (or <code>joinpath(homedir(), &quot;.julia&quot;, &quot;datasets&quot;)</code> on windows). For this tutorial we&#39;ll use the tutorial data from the DataSets docs directory at <a href="https://github.com/JuliaComputing/DataSets.jl/tree/master/docs/src/data">https://github.com/JuliaComputing/DataSets.jl/tree/master/docs/src/data</a>..</p><p>To make <code>DataSets</code> aware of the data, let&#39;s create a <code>Data.toml</code> file in <code>joinpath(homedir(), &quot;.julia&quot;, &quot;datasets&quot;, &quot;Data.toml&quot;)</code> and add the following content:</p><pre><code class="language-toml"># Version of the data TOML format.
+data_config_version=0
+
+[[datasets]]
+# Some alphanumeric name (can include spaces and underscores)
+name=&quot;a_text_file&quot;
+# Optional description
+description=&quot;A text file containing the standard greeting&quot;
+# A unique ID. Generate with UUIDs.uuid4()
+uuid=&quot;b498f769-a7f6-4f67-8d74-40b770398f26&quot;
+
+    # Storage location
+    [datasets.storage]
+    # The name of the storage driver.
+    driver=&quot;FileSystem&quot;
+    # Data stored in FileSystem is either Blob (a file) or BlobTree (a directory/folder)
+    type=&quot;Blob&quot;
+    # Path with posix `/` separators.
+    # Use @__DIR__ for paths relative to Data.toml
+    path=&quot;@__DIR__/data/file.txt&quot;
+
+# A second example
+[[datasets]]
+name=&quot;a_tree_example&quot;
+description=&quot;A very simple directory tree&quot;
+uuid=&quot;e7fd7080-e346-4a68-9ca9-98593a99266a&quot;
+
+    [datasets.storage]
+    driver=&quot;FileSystem&quot;
+    type=&quot;BlobTree&quot;
+    path=&quot;@__DIR__/data/csvset&quot;
+
+# Further datasets can be added as desired
+# [[datasets]]
+# ...
+</code></pre><p>Because we&#39;ve written the <code>Data.toml</code> into a default location which is searched for by <a href="../reference/#DataSets.PROJECT"><code>DataSets.PROJECT</code></a>, it will automatically become accessible in the default global data project:</p><pre><code class="language-none">julia&gt; DataSets.PROJECT
+DataSets.StackedDataProject:
+  DataSets.ActiveDataProject:
+    (empty)
+  DataSets.TomlFileDataProject [~/.julia/datasets/Data.toml]:
+    a_text_file    =&gt; b498f769-a7f6-4f67-8d74-40b770398f26
+    a_tree_example =&gt; e7fd7080-e346-4a68-9ca9-98593a99266a</code></pre><p>The <a href="../reference/#DataSets.dataset"><code>dataset</code></a> function can then be used to load metadata for a particular dataset:</p><pre><code class="language-julia-repl">julia&gt; dataset(&quot;a_text_file&quot;)
+name = &quot;a_text_file&quot;
+uuid = &quot;b498f769-a7f6-4f67-8d74-40b770398f26&quot;
+description = &quot;A text file containing the standard greeting&quot;
+
+[storage]
+driver = &quot;FileSystem&quot;
+type = &quot;Blob&quot;
+path = &quot;.../DataSets/docs/src/data/file.txt&quot;</code></pre><p>If you prefer to pass around the data project explicitly rather than relying on global configuration this is also possible:</p><pre><code class="language-julia-repl">julia&gt; project = DataSets.load_project(&quot;src/Data.toml&quot;)
+DataSets.DataProject:
+  a_text_file    =&gt; b498f769-a7f6-4f67-8d74-40b770398f26
+  a_tree_example =&gt; e7fd7080-e346-4a68-9ca9-98593a99266a
+
+julia&gt; dataset(project, &quot;a_text_file&quot;)
+name = &quot;a_text_file&quot;
+uuid = &quot;b498f769-a7f6-4f67-8d74-40b770398f26&quot;
+description = &quot;A text file containing the standard greeting&quot;
+
+[storage]
+driver = &quot;FileSystem&quot;
+type = &quot;Blob&quot;
+path = &quot;.../DataSets/docs/src/data/file.txt&quot;</code></pre><h2 id="Loading-Data"><a class="docs-heading-anchor" href="#Loading-Data">Loading Data</a><a id="Loading-Data-1"></a><a class="docs-heading-anchor-permalink" href="#Loading-Data" title="Permalink"></a></h2><p>You can call <code>open()</code> on a DataSet to inspect the data inside.  <code>open()</code> will return the <a href="../reference/#DataSets.Blob"><code>Blob</code></a> and <a href="../reference/#DataSets.BlobTree"><code>BlobTree</code></a> types for local files and directories on disk. For example,</p><pre><code class="language-julia-repl">julia&gt; open(dataset(&quot;a_text_file&quot;))
+📄  @ .../DataSets/docs/src/data/file.txt
+
+julia&gt; open(dataset(&quot;a_tree_example&quot;))
+📂 Tree  @ .../DataSets/docs/src/data/csvset
+ 📄 1.csv
+ 📄 2.csv</code></pre><p>Use the form <code>open(T, dataset)</code> to read the data as a specific type. <code>Blob</code> data can be opened as <code>String</code>, <code>IO</code>, or <code>Vector{UInt8}</code>, depending on your needs:</p><pre><code class="language-julia-repl">julia&gt; io = open(IO, dataset(&quot;a_text_file&quot;))
+IOStream(&lt;file .../DataSets/docs/src/data/file.txt&gt;)
+
+julia&gt; read(io, String)
+&quot;Hello world!\n&quot;
+
+julia&gt; buf = open(Vector{UInt8}, dataset(&quot;a_text_file&quot;));
+
+julia&gt; String(buf)
+&quot;Hello world!\n&quot;
+
+julia&gt; open(String, dataset(&quot;a_text_file&quot;))
+&quot;Hello world!\n&quot;</code></pre><p>To ensure the dataset is closed again in a timely way (freeing any resources such as file handles), you should use the scoped form, for example:</p><pre><code class="language-julia-repl">julia&gt; open(IO, dataset(&quot;a_text_file&quot;)) do io
+           content = read(io, String)
+           @show content
+           nothing
+       end
+content = &quot;Hello world!\n&quot;</code></pre><p>Let&#39;s look at some tree-like data which is represented on local disk as a folder or directory. Tree data is opened in Julia as the <a href="../reference/#DataSets.BlobTree"><code>BlobTree</code></a> type and can be indexed with path components to get at the file <a href="../reference/#DataSets.Blob"><code>Blob</code></a>s inside. In turn, we can <code>open()</code> one of the file blobs and look at the data contained within.</p><pre><code class="language-julia-repl">julia&gt; tree = open(BlobTree, dataset(&quot;a_tree_example&quot;))
+📂 Tree  @ .../DataSets/docs/src/data/csvset
+ 📄 1.csv
+ 📄 2.csv
+
+julia&gt; tree[&quot;1.csv&quot;]
+📄 1.csv @ .../DataSets/docs/src/data/csvset
+
+julia&gt; open(String, tree[&quot;1.csv&quot;]) |&gt; Text
+Name,Age
+&quot;Aaron&quot;,23
+&quot;Harry&quot;,42</code></pre><h2 id="Program-Entry-Points"><a class="docs-heading-anchor" href="#Program-Entry-Points">Program Entry Points</a><a id="Program-Entry-Points-1"></a><a class="docs-heading-anchor-permalink" href="#Program-Entry-Points" title="Permalink"></a></h2><p>Rather than manually using the <code>open()</code> functions as shown above, the <code>@datafunc</code> macro lets you define entry points where <code>DataSet</code>s will be mapped into your program.</p><p>For example, here we define an entry point called <code>main</code> which takes</p><ul><li>DataSet type <code>Blob</code>, presenting it as a <code>String</code> within the program</li><li>DataSet type <code>BlobTree</code>, presenting it as a <code>BlobTree</code> within the program</li></ul><p>The <code>@datarun</code> macro allows you to call such program entry points, extracting named data sets from a given project.</p><pre><code class="language-julia-repl">julia&gt; @datafunc function main(x::Blob=&gt;String, t::BlobTree=&gt;BlobTree)
+           @show x
+           open(String, t[&quot;1.csv&quot;]) do csv_data
+               @show csv_data
+           end
+       end
+main (generic function with 2 methods)
+
+julia&gt; @datarun main(&quot;a_text_file&quot;, &quot;a_tree_example&quot;);
+x = &quot;Hello world!\n&quot;
+csv_data = &quot;Name,Age\n\&quot;Aaron\&quot;,23\n\&quot;Harry\&quot;,42\n&quot;</code></pre><p>In a given program it&#39;s possible to have multiple entry points by simply defining multiple <code>@datafunc</code> implementations. In this case <code>@datarun</code> will dispatch to the entry point with the matching <code>DataSet</code> type.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../reference/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Monday 14 June 2021 23:27">Monday 14 June 2021</span>. Using Julia version 1.6.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
