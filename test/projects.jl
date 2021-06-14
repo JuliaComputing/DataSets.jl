@@ -8,6 +8,14 @@ using DataSets:
     StackedDataProject,
     project_name
 
+test_project_names = ["a_table",
+                      "a_text_file",
+                      "a_tree_example",
+                      "embedded_blob",
+                      "embedded_tree",
+                      "old_backend_blob",
+                      "old_backend_tree"]
+
 @testset "TomlFileDataProject" begin
     proj = TomlFileDataProject(abspath("Data.toml"))
     # getindex, get
@@ -16,13 +24,13 @@ using DataSets:
     @test isnothing(get(proj, "nonexistent_data", nothing))
 
     # keys
-    @test sort(collect(keys(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
+    @test sort(collect(keys(proj))) == test_project_names
     @test haskey(proj, "a_text_file")
     @test !haskey(proj, "nonexistent_data")
 
     # iteration
-    @test sort(getproperty.(collect(proj), :name)) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
-    @test sort(first.(pairs(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
+    @test sort(getproperty.(collect(proj), :name)) == test_project_names
+    @test sort(first.(pairs(proj))) == test_project_names
 
     # identity
     @test project_name(proj) == abspath("Data.toml")
@@ -99,7 +107,7 @@ end
     push!(proj, TomlFileDataProject(joinpath(@__DIR__, "active_project", "Data.toml")))
     push!(proj, TomlFileDataProject(joinpath(@__DIR__, "Data.toml")))
 
-    @test sort(collect(keys(proj))) == ["a_table", "a_text_file", "a_tree_example", "embedded_blob", "embedded_tree", "old_backend_blob", "old_backend_tree"]
+    @test sort(collect(keys(proj))) == test_project_names
     # Data "a_text_file" should be found in the first project in the stack,
     # overriding the data of the same name in the second project.
     @test proj["a_text_file"].uuid == UUID("314996ef-12be-40d0-912c-9755af354fdb")
@@ -123,10 +131,9 @@ end
 
     # Test that __init__ takes global DataSets.PROJECT from ENV
     empty!(DataSets.PROJECT)
-    ENV["JULIA_DATASETS_PATH"] = datasets_paths
+    ENV["JULIA_DATASETS_PATH"] = @__DIR__
     DataSets.__init__()
-    @test DataSets.PROJECT.projects[1] isa ActiveDataProject
-    @test DataSets.PROJECT.projects[2] isa TomlFileDataProject
-    @test DataSets.PROJECT.projects[3] isa TomlFileDataProject
+    @test DataSets.PROJECT.projects[1] isa TomlFileDataProject
+    @test project_name(DataSets.PROJECT.projects[1]) == joinpath(@__DIR__, "Data.toml")
 end
 
