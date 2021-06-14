@@ -1,0 +1,21 @@
+data_config_version = 0
+
+[[datasets]]
+description="Test dynamic loading of drivers"
+name="dummy_storage_blob"
+uuid="785b3cdc-428e-426f-a3f7-3f6ae88a9637"
+
+    [datasets.storage]
+    driver="DummyTomlStorage"
+    type="Blob"
+    data="data_from_dummy_backend"
+
+#-------------------------------------------------------------------------------
+
+[[drivers]]
+type="storage"
+name="DummyTomlStorage"
+
+    [drivers.module]
+    name="DummyStorageBackends"
+    uuid="89b7a33a-382e-4698-a931-421b088d35a2"
