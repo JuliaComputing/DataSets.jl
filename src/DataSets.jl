@@ -559,6 +559,14 @@ function add_storage_driver(project::AbstractDataProject)
             continue
         end
         pkgid = PkgId(UUID(conf["module"]["uuid"]), conf["module"]["name"])
+        if Base.haskey(Base.package_locks, pkgid)
+            # Hack: Avoid triggering another call to require() for packages
+            # which are already in the process of being loaded. (This would
+            # result in a deadlock!)
+            #
+            # Obviously this depends on Base internals...
+            continue
+        end
         mod = Base.require(pkgid)
         driver_name = conf["name"]
         # Module itself does add_storage_driver() inside its __init__
