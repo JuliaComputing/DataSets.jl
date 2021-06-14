@@ -66,17 +66,19 @@ DataSets.add_storage_driver("OldBackendAPI"=>connect_old_backend)
 
 #-------------------------------------------------------------------------------
 @testset "OldBackendAPI" begin
-    @test open(IO, dataset("old_backend_blob")) do io
+    proj = DataSets.load_project("Data.toml")
+
+    @test open(IO, dataset(proj, "old_backend_blob")) do io
            read(io, String)
     end == "x"
-    @test String(open(read, IO, dataset("old_backend_blob"))) == "x"
-    @test open(Vector{UInt8}, dataset("old_backend_blob")) == UInt8['x']
-    @test read(open(dataset("old_backend_blob")), String) == "x"
-    @test read(open(dataset("old_backend_blob"))) == UInt8['x']
+    @test String(open(read, IO, dataset(proj, "old_backend_blob"))) == "x"
+    @test open(Vector{UInt8}, dataset(proj, "old_backend_blob")) == UInt8['x']
+    @test read(open(dataset(proj, "old_backend_blob")), String) == "x"
+    @test read(open(dataset(proj, "old_backend_blob"))) == UInt8['x']
 
-    @test readdir(open(dataset("old_backend_tree"))) == ["a.txt", "b.txt"]
-    @test open(dataset("old_backend_tree"))[path"a.txt"] isa Blob
-    @test read(open(dataset("old_backend_tree"))[path"a.txt"], String) == "a"
-    @test read(open(dataset("old_backend_tree"))[path"b.txt"], String) == "b"
+    @test readdir(open(dataset(proj, "old_backend_tree"))) == ["a.txt", "b.txt"]
+    @test open(dataset(proj, "old_backend_tree"))[path"a.txt"] isa Blob
+    @test read(open(dataset(proj, "old_backend_tree"))[path"a.txt"], String) == "a"
+    @test read(open(dataset(proj, "old_backend_tree"))[path"b.txt"], String) == "b"
 end
 

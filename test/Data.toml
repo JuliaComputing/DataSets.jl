@@ -56,6 +56,8 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
 
 #--------------------------------------------------
+# Data embedded in the TOML
+
 [[datasets]]
 description="A data blob embedded in the TOML"
 name="embedded_blob"
@@ -95,6 +97,8 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
         "a.txt" = "NCBhIGNvbnRlbnQ="
 
 #--------------------------------------------------
+# Old backend API tests
+
 [[datasets]]
 description="Test old storage backend API, Blob"
 name="old_backend_blob"
