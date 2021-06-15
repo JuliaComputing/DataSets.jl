@@ -122,7 +122,7 @@ close(r)
 #-------------------------------------------------------------------------------
 
 # Fixes for ZipFile.jl
-# TODO: Upstream these!
+# TODO: Remove these once https://github.com/fhs/ZipFile.jl/pull/75 is in a release.
 
 # It appears that ZipFile.jl just doesn't have a way to rewind to the start of
 # one of the embedded files.

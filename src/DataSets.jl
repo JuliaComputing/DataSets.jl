@@ -522,15 +522,28 @@ function add_storage_driver((name,opener)::Pair)
     end
 end
 
+function _find_driver(dataset)
+    storage_config = dataset.storage
+    driver_name = get(storage_config, "driver") do
+        error("`storage.driver` configuration not found for dataset $(dataset.name)")
+    end
+    driver = lock(_storage_drivers_lock) do
+        get(_storage_drivers, driver_name) do
+            error("""
+                  Storage driver $(repr(driver_name)) not found for dataset $(dataset.name).
+                  Current drivers are $(collect(keys(_storage_drivers)))
+                  """)
+        end
+    end
+end
+
 #-------------------------------------------------------------------------------
 # Functions for opening datasets
 
 # do-block form of open()
 function Base.open(f::Function, as_type, dataset::DataSet)
     storage_config = dataset.storage
-    driver = lock(_storage_drivers_lock) do
-        _storage_drivers[storage_config["driver"]]
-    end
+    driver = _find_driver(dataset)
     driver(storage_config, dataset) do storage
         open(f, as_type, storage)
     end
@@ -539,10 +552,7 @@ end
 # Contexts-based form of open()
 @! function Base.open(dataset::DataSet)
     storage_config = dataset.storage
-    driver_name = storage_config["driver"]
-    driver = lock(_storage_drivers_lock) do
-        _storage_drivers[driver_name]
-    end
+    driver = _find_driver(dataset)
     # Use `enter_do` because drivers don't yet use the ResourceContexts.jl mechanism
     (storage,) = @! enter_do(driver, storage_config, dataset)
     storage
