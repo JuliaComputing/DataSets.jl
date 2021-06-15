@@ -27,7 +27,8 @@ struct DataSet
     conf
 
     function DataSet(conf)
-        _check_keys(conf, DataSet, ["uuid", "storage", "name"])
+        _check_keys(conf, DataSet, ["uuid"=>String, "storage"=>Dict, "name"=>String])
+        _check_keys(conf["storage"], DataSet, ["driver"=>String])
         check_dataset_name(conf["name"])
         new(UUID(conf["uuid"]), conf)
     end
@@ -55,15 +56,18 @@ struct DataSet
     =#
 end
 
-function _check_keys(toml, context, keys)
-    missed_keys = filter(k->!haskey(toml, k), keys)
+_key_match(config, (k,T)::Pair) = haskey(config, k) && config[k] isa T
+_key_match(config, k::String) = haskey(config, k)
+
+function _check_keys(config, context, keys)
+    missed_keys = filter(k->!_key_match(config, k), keys)
     if !isempty(missed_keys)
         error("""
-              Missing expected keys:
+              Missing expected keys in $context:
               $missed_keys
 
               In TOML fragment:
-              $(sprint(TOML.print,toml))
+              $(sprint(TOML.print,config))
               """)
     end
 end
@@ -74,10 +78,6 @@ function check_dataset_name(name::AbstractString)
     if !occursin(r"^[[:alpha:]][[:alnum:]_]*$", name)
         error("DataSet name must start with a letter, and can only contain letters, numbers or underscores; got \"$name\"")
     end
-end
-
-function read_toml(::Type{DataSet}, toml)
-    DataSet(toml)
 end
 
 # Hacky thing until we figure out which fields DataSet should actually have.
@@ -228,6 +228,8 @@ end
 
 DataProject() = DataProject(Dict{String,DataSet}())
 
+DataProject(project::AbstractDataProject) = DataProject(Dict(pairs(project)))
+
 function _fill_template(toml_path, toml_str)
     # Super hacky templating for paths relative to the toml file.
     # We really should have something a lot nicer here...
@@ -263,13 +265,15 @@ function load_project(path::AbstractString; auto_update=false)
 end
 
 function load_project(config::AbstractDict; kws...)
+    _check_keys(config, "Data.toml", ["data_config_version"=>Integer,
+                                      "datasets"=>AbstractVector])
     format_ver = config["data_config_version"]
     if format_ver > CURRENT_DATA_CONFIG_VERSION
         error("data_config_version=$format_ver is newer than supported")
     end
     proj = DataProject()
-    for data_toml in config["datasets"]
-        dataset = read_toml(DataSet, data_toml)
+    for dataset_conf in config["datasets"]
+        dataset = DataSet(dataset_conf)
         link_dataset(proj, dataset.name => dataset)
     end
     proj
@@ -413,19 +417,20 @@ end
 
 function data_project_from_path(path)
     if path == "@"
-        project = ActiveDataProject()
+        ActiveDataProject()
     else
-        project = TomlFileDataProject(expand_project_path(path))
+        TomlFileDataProject(expand_project_path(path))
     end
 end
 
 function create_project_stack(env)
     stack = []
     env_search_path = get(env, "JULIA_DATASETS_PATH", nothing)
-    if isnothing(env_search_path) || env_search_path == ""
+    if isnothing(env_search_path)
         paths = ["@", ""]
     else
-        paths = split(env_search_path, Sys.iswindows() ? ';' : ':')
+        paths = isempty(env_search_path) ? String[] :
+            split(env_search_path, Sys.iswindows() ? ';' : ':')
     end
     for path in paths
         project = data_project_from_path(path)
@@ -492,7 +497,7 @@ function load_project!(path_or_config)
     pushfirst!(PROJECT, new_project)
     # deprecated: _current_project reflects only the initial version of the
     # project on *top* of the stack.
-    _current_project = DataProject(Dict(pairs(new_project)))
+    _current_project = DataProject(new_project)
 end
 
 #-------------------------------------------------------------------------------

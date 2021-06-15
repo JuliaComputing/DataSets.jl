@@ -198,7 +198,7 @@ function parse_data_repl_cmd(cmdstr)
     popfirst!(tokens)
     if cmd in ("list", "ls")
         return quote
-            $DataSets.DataProject(Dict(pairs($DataSets.PROJECT)))
+            $DataSets.DataProject($DataSets.PROJECT)
         end
     elseif cmd == "stack" && length(tokens) >= 1
         subcmd = popfirst!(tokens)

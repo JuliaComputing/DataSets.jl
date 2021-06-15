@@ -1,3 +1,5 @@
+ENV["JULIA_DATASETS_PATH"] = ""
+
 using DataSets
 using Test
 using UUIDs
