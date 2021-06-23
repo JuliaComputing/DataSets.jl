@@ -378,6 +378,8 @@ end
 
 StackedDataProject() = StackedDataProject([])
 
+data_drivers(stack::StackedDataProject) = vcat(data_drivers.(stack.projects)...)
+
 function Base.keys(stack::StackedDataProject)
     names = []
     for project in stack.projects
@@ -503,7 +505,12 @@ function __init__()
     if !_isprecompiling()
         global PROJECT = create_project_stack(ENV)
         for proj in PROJECT.projects
-            add_storage_driver(proj)
+            try
+                add_storage_driver(proj)
+            catch exc
+                @error "Could not load storage drivers from data project" #=
+                    =# project=proj exception=(exc,catch_backtrace())
+            end
         end
     end
 end
@@ -519,6 +526,7 @@ May be renamed in a future version.
 """
 function load_project!(path_or_config)
     new_project = load_project(path_or_config, auto_update=true)
+    add_storage_driver(new_project)
     pushfirst!(PROJECT, new_project)
     # deprecated: _current_project reflects only the initial version of the
     # project on *top* of the stack.
