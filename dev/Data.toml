@@ -1,5 +1,5 @@
 # Version of the data TOML format.
-data_config_version=0
+data_config_version=1
 
 [[datasets]]
 # Some alphanumeric name (can include spaces and underscores)
