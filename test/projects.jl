@@ -14,7 +14,8 @@ test_project_names = ["a_table",
                       "embedded_blob",
                       "embedded_tree",
                       "old_backend_blob",
-                      "old_backend_tree"]
+                      "old_backend_tree",
+                      "some_namespace/a_text_file"]
 
 @testset "TomlFileDataProject" begin
     proj = TomlFileDataProject(abspath("Data.toml"))

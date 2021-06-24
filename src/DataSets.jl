@@ -73,11 +73,32 @@ function _check_keys(config, context, keys)
     end
 end
 
+"""
+    check_dataset_name(name)
+
+Check whether a dataset name is valid. Valid names include start with a letter
+and may contain letters, numbers or `_`. Names may be hieracicial, with pieces
+separated with forward slashes. Examples:
+
+    my_data
+    my_data_1
+    username/data
+    organization/project/data
+"""
 function check_dataset_name(name::AbstractString)
-    # Disallow punctuation in DataSet names for now, as it may be needed as
+    # DataSet names disallow most punctuation for now, as it may be needed as
     # delimiters in data-related syntax (eg, for the data REPL).
-    if !occursin(r"^[[:alpha:]][[:alnum:]_]*$", name)
-        error("DataSet name must start with a letter, and can only contain letters, numbers or underscores; got \"$name\"")
+    dataset_name_pattern = r"
+        ^
+        [[:alpha:]]
+        (?:
+            [[:alnum:]_]      |
+            / (?=[[:alpha:]])
+        )*
+        $
+        "x
+    if !occursin(dataset_name_pattern, name)
+        error("DataSet name \"$name\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `_` or `/`.")
     end
 end
 
@@ -164,7 +185,16 @@ function dataset(proj::AbstractDataProject, name::AbstractString)
     # In the future, we can consider parsing `name` into a dataset prefix and a
     # data selector / resource section. Eg a path for BlobTree which gives us a
     # SubDataSet
-    proj[name]
+    #
+    # The URN RFC8141 has some good design inspiration here, in particular the
+    # distinction between r-component and q-component seems relevant:
+    # * Some parameters may need to be passed to the "resolver" (ie, the data
+    #   storage backend)
+    # * Some parameters may need to be passed to the dataset itself (eg, a
+    #   relative path within the dataset)
+    #
+    # See https://datatracker.ietf.org/doc/html/rfc8141#page-12
+    return proj[name]
 end
 
 function Base.haskey(proj::AbstractDataProject, name::AbstractString)
@@ -247,10 +277,45 @@ function _fill_template(toml_path, toml_str)
 end
 
 """
-Current version of the data configuration format, as reflected in the
-Data.toml data_config_version key.
+`CURRENT_DATA_CONFIG_VERSION` is the current version of the data configuration
+format, as reflected in the Data.toml `data_config_version` key. This allows old
+versions of DataSets.jl to detect when the Data.toml schema has changed.
+
+New versions of DataSets.jl should always try to parse old versions of
+Data.toml where possible.
+
+### Version 0 (DataSets <= 0.2.3):
+
+Required structure:
+
+```toml
+data_config_version = 0
+
+[[datasets]]
+name = "alphnumeric and underscore chars"
+uuid = "a uuid"
+
+[datasets.storage]
+    driver = "StorageDriver"
+```
+
+### Version 1 (DataSets 0.2.4):
+
+Same as version 0 with additions
+* Allows the `/` character in dataset names to serve as a namespace separator.
+* Adds a new `[[drivers]]` section with the format
+
+```toml
+[[drivers]]
+type="storage"
+name="<driver name>"
+
+    [drivers.module]
+    name="<module name>"
+    uuid="<module uuid>"
+```
 """
-const CURRENT_DATA_CONFIG_VERSION = 0
+const CURRENT_DATA_CONFIG_VERSION = 1
 
 """
     load_project(path; auto_update=false)
@@ -276,7 +341,10 @@ function load_project(config::AbstractDict; kws...)
                                       "datasets"=>AbstractVector])
     format_ver = config["data_config_version"]
     if format_ver > CURRENT_DATA_CONFIG_VERSION
-        error("data_config_version=$format_ver is newer than supported")
+        error("""
+              data_config_version=$format_ver is newer than supported.
+              Consider upgrading to a newer version of DataSets.jl
+              """)
     end
     proj = DataProject()
     for dataset_conf in config["datasets"]
