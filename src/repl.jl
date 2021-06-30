@@ -36,9 +36,9 @@ function show_dataset(name)
 end
 
 # hex dump in xxd format
-function hexdump(out_stream, buf; groups_per_line=8, group_size=2)
+function hexdump(out_stream, buf; groups_per_line=8, group_size=2, max_lines=typemax(Int))
     linesize = groups_per_line*group_size
-    for line = 1:div(length(buf), linesize, RoundUp)
+    for line = 1:min(max_lines, div(length(buf), linesize, RoundUp))
         linebuf = buf[(line-1)*linesize+1 : min(line*linesize,end)]
         address = (line-1)*linesize
         print(out_stream, string(address, base=16, pad=4), ": ")
@@ -72,16 +72,25 @@ function _show_dataset(out_stream::IO, blob::Blob)
             isvalid(c) || return false
             isprint(c) || c in ('\n', '\r', '\t')
         end
+        display_lines, _ = displaysize(out_stream)
+        max_lines = max(5, display_lines ÷ 2)
         if n_textlike / length(str) > 0.95
-            # It's approximately UTF-8 encoded text data.
-            print(out_stream, str)
+            # It's approximately UTF-8 encoded text data - print as text
+            lines = split(str, '\n', keepempty=true)
+            nlines = min(lastindex(lines), max_lines)
+            print(out_stream, join(lines[1:nlines], '\n'))
+            println(out_stream)
+            if !eof(io) || nlines < length(lines)
+                println(out_stream, "⋮")
+            end
         else
             # It's something else, perhaps binary or another text
             # encoding. Do a hex dump instead.
-            hexdump(out_stream, buf)
-        end
-        if !eof(io)
-            println(out_stream, "…")
+            println(out_stream, "Binary data:")
+            hexdump(out_stream, buf; max_lines=max_lines)
+            if !eof(io)
+                println(out_stream, "⋮")
+            end
         end
     end
 end
