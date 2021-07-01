@@ -9,7 +9,7 @@ _data_repl_help = md"""
 |:----------   |:--------- | :---------- |
 | `help`       | `?`       | Show this message |
 | `list`       | `ls`      | List all datasets by name |
-| `show $name` |           | Show the content of dataset `$name` |
+| `show $name` |           | Preview the content of dataset `$name` |
 | `stack` | `st`           | Manipulate the global data search stack |
 | `stack list` | `st ls`   | List all projects in the global data search stack |
 | `stack push $path` | `st push` | Add data project `$path` to front of the search stack |
