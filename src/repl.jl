@@ -5,6 +5,8 @@ using Markdown
 _data_repl_help = md"""
 ## DataSets Data REPL
 
+Press `>` to enter the data repl. Press TAB to complete commands.
+
 |   Command    | Alias     | Action      |
 |:----------   |:--------- | :---------- |
 | `help`       | `?`       | Show this message |

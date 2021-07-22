@@ -36,7 +36,7 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 #--------------------------------------------------
 [[datasets]]
 description="Gzipped CSV example"
-name="a_table"
+name="gzipped_table"
 uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
     [datasets.storage]

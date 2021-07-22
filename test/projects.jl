@@ -8,11 +8,11 @@ using DataSets:
     StackedDataProject,
     project_name
 
-test_project_names = ["a_table",
-                      "a_text_file",
+test_project_names = ["a_text_file",
                       "a_tree_example",
                       "embedded_blob",
                       "embedded_tree",
+                      "gzipped_table",
                       "old_backend_blob",
                       "old_backend_tree",
                       "some_namespace/a_text_file"]
