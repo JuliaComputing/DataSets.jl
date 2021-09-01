@@ -9,6 +9,14 @@ using Base: PkgId
 export DataSet, dataset, @datafunc, @datarun
 export Blob, BlobTree, newfile, newdir
 
+"""
+The current DataSets version number
+"""
+const PACKAGE_VERSION = let
+    project = TOML.parsefile(joinpath(pkgdir(DataSets), "Project.toml"))
+    VersionNumber(project["version"])
+end
+
 include("paths.jl")
 
 #-------------------------------------------------------------------------------
