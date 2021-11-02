@@ -638,10 +638,6 @@ end
 
 function add_storage_driver(project::AbstractDataProject)
     for conf in data_drivers(project)
-        if conf["type"] != "storage"
-            # Anticipate there might be layer drivers too
-            continue
-        end
         pkgid = PkgId(UUID(conf["module"]["uuid"]), conf["module"]["name"])
         if Base.haskey(Base.package_locks, pkgid)
             # Hack: Avoid triggering another call to require() for packages
@@ -652,14 +648,35 @@ function add_storage_driver(project::AbstractDataProject)
             continue
         end
         mod = Base.require(pkgid)
-        driver_name = conf["name"]
-        # Module itself does add_storage_driver() inside its __init__
-        # TODO: Is this a good workflow?
-        lock(_storage_drivers_lock) do
-            get(_storage_drivers, driver_name) do
-                error("Package $pkgid did not provide storage driver $driver_name")
+        #=
+        # TODO: Improve driver loading invariants.
+        #
+        # The difficulty here is that there's two possible ways for drivers to
+        # work:
+        # 1. The driver depends explicitly on `using DataSets`, so
+        #    DataSets.__init__ is called *before* the Driver.__init__.
+        # 2. The driver uses a Requires-like mechanism to support multiple
+        #    incompatible DataSets versions, so Driver.__init__ can occur
+        #    *before* DataSets.__init__.
+        #
+        # This makes it hard for DataSets to check which drivers are added by a
+        # module: In case (2), the following check fails when the driver is
+        # loaded before DataSets and in case (1) we hit the double-require
+        # problem, resulting in the Base.package_locks bailout which disables
+        # the check below.
+        #
+        if conf["type"] == "storage"
+            driver_name = conf["name"]
+            # `mod` is assumed to run add_storage_driver() inside its __init__,
+            # unless the symbol mod.datasets_load_hook exists (in which case we
+            # call this instead).
+            lock(_storage_drivers_lock) do
+                get(_storage_drivers, driver_name) do
+                    error("Package $pkgid did not provide storage driver $driver_name")
+                end
             end
         end
+        =#
     end
 end
 
