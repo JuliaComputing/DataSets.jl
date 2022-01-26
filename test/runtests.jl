@@ -57,6 +57,12 @@ end
         tree = @! open(tree_data)
         @test readdir(tree) == ["1.csv", "2.csv"]
     end
+
+    blob_in_tree_data = dataset(proj, "a_tree_example#1.csv")
+    @test open(blob_in_tree_data) isa Blob
+    @context begin
+        @test @!(open(String, blob_in_tree_data)) == """Name,Age\n"Aaron",23\n"Harry",42\n"""
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -99,6 +105,26 @@ end
     @test_throws ErrorException DataSets.check_dataset_name("a.b")
     @test_throws ErrorException DataSets.check_dataset_name("a/b/")
     @test_throws ErrorException DataSets.check_dataset_name("/a/b")
+end
+
+@testset "URL-like dataspec parsing" begin
+    proj = DataSets.load_project("Data.toml")
+
+    @test !haskey(dataset(proj, "a_text_file"), "dataspec")
+
+    # URL-like query
+    @test dataset(proj, "a_text_file?x=1&yy=2")["dataspec"]["query"] == Dict("x"=>"1", "yy"=>"2")
+    @test dataset(proj, "a_text_file?y%20y=x%20x")["dataspec"]["query"] == Dict("y y"=>"x x")
+    @test dataset(proj, "a_text_file?x=%3d&y=%26")["dataspec"]["query"] == Dict("x"=>"=", "y"=>"&")
+
+    # URL-like fragment
+    @test dataset(proj, "a_text_file#a/b")["dataspec"]["fragment"] == "a/b"
+    @test dataset(proj, "a_text_file#x%20x")["dataspec"]["fragment"] == "x x"
+    @test dataset(proj, "a_text_file#x%ce%b1x")["dataspec"]["fragment"] == "xαx"
+
+    # Combined query and fragment
+    @test dataset(proj, "a_text_file?x=1&yy=2#frag")["dataspec"]["query"] == Dict("x"=>"1", "yy"=>"2")
+    @test dataset(proj, "a_text_file?x=1&yy=2#frag")["dataspec"]["fragment"] == "frag"
 end
 
 #-------------------------------------------------------------------------------

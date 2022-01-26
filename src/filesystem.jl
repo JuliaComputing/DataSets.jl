@@ -271,7 +271,7 @@ end
 #--------------------------------------------------
 
 # Filesystem storage driver
-function connect_filesystem(f, config, _)
+function connect_filesystem(f, config, dataset)
     path = config["path"]
     type = config["type"]
     if type == "Blob"
@@ -280,6 +280,10 @@ function connect_filesystem(f, config, _)
     elseif type == "BlobTree"
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
         storage = BlobTree(FileSystemRoot(path))
+        path = dataspec_fragment_as_path(dataset)
+        if !isnothing(path)
+            storage = storage[path]
+        end
     else
         throw(ArgumentError("DataSet type $type not supported on the filesystem"))
     end
