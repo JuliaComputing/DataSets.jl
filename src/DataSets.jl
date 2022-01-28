@@ -119,6 +119,20 @@ function Base.getproperty(d::DataSet, name::Symbol)
     end
 end
 
+Base.getindex(d::DataSet, name::AbstractString) = getindex(d.conf, name)
+Base.haskey(d::DataSet, name::AbstractString) = haskey(d.conf, name)
+
+# Split the fragment section as a '/' separated RelPath
+function dataspec_fragment_as_path(d::DataSet)
+    if haskey(d, "dataspec")
+        fragment = get(d.dataspec, "fragment", nothing)
+        if !isnothing(fragment)
+            return RelPath(split(fragment, '/'))
+        end
+    end
+    return nothing
+end
+
 function Base.show(io::IO, d::DataSet)
     print(io, DataSet, "(name=$(repr(d.name)), uuid=$(repr(d.uuid)), #= … =#)")
 end
@@ -188,21 +202,83 @@ To open a directory as a browsable tree object,
 open(BlobTree, dataset("a_tree_example"))
 ```
 """
-function dataset(proj::AbstractDataProject, name::AbstractString)
-    # Non-fancy search... for now :)
-    # In the future, we can consider parsing `name` into a dataset prefix and a
-    # data selector / resource section. Eg a path for BlobTree which gives us a
-    # SubDataSet
-    #
-    # The URN RFC8141 has some good design inspiration here, in particular the
-    # distinction between r-component and q-component seems relevant:
-    # * Some parameters may need to be passed to the "resolver" (ie, the data
-    #   storage backend)
-    # * Some parameters may need to be passed to the dataset itself (eg, a
-    #   relative path within the dataset)
-    #
-    # See https://datatracker.ietf.org/doc/html/rfc8141#page-12
-    return proj[name]
+function dataset(proj::AbstractDataProject, spec::AbstractString)
+    namestr, query, fragmentstr = _split_dataspec(spec)
+
+    if isnothing(namestr)
+        throw(ArgumentError("Invalid dataset specification: $spec"))
+    end
+
+    dataset = proj[namestr]
+
+    if isnothing(query) && isnothing(fragmentstr)
+        return dataset
+    end
+
+    # Enhance dataset with "dataspec" holding URL-like fragment & query
+    dataspec = Dict()
+    if !isnothing(query)
+        dataspec["query"] = Dict{String,Any}(query)
+    end
+    if !isnothing(fragmentstr)
+        dataspec["fragment"] = fragmentstr
+    end
+
+    # We need to take care here with copy() to avoid modifying the original
+    # dataset configuration.
+    conf = copy(dataset.conf)
+    conf["dataspec"] = dataspec
+
+    return DataSet(conf)
+end
+
+
+# Percent-decode a string according to the URI escaping rules.
+# Vendored from URIs.jl for now to avoid depending on that entire package for
+# this one function.
+function _unescapeuri(str)
+    occursin("%", str) || return str
+    out = IOBuffer()
+    i = 1
+    io = IOBuffer(str)
+    while !eof(io)
+        c = read(io, Char)
+        if c == '%'
+            c1 = read(io, Char)
+            c = read(io, Char)
+            write(out, parse(UInt8, string(c1, c); base=16))
+        else
+            write(out, c)
+        end
+    end
+    return String(take!(out))
+end
+
+function _split_dataspec(spec::AbstractString)
+    # Parse as a suffix of URI syntax
+    # name/of/dataset?param1=value1&param2=value2#fragment
+    m = match(r"
+        ^
+        ((?:[[:alpha:]][[:alnum:]_]*/?)+)  # name     - a/b/c
+        (?:\?([^#]*))?                     # query    - a=b&c=d
+        (?:\#(.*))?                        # fragment - ...
+        $"x,
+        spec)
+    if isnothing(m)
+        return nothing, nothing, nothing
+    end
+    namestr = m[1]
+    query = m[2]
+    fragmentstr = m[3]
+
+    if !isnothing(query)
+        query = [_unescapeuri(x)=>_unescapeuri(y) for (x,y) in split.(split(query, '&'), '=')]
+    end
+    if !isnothing(fragmentstr)
+        fragmentstr = _unescapeuri(fragmentstr)
+    end
+
+    namestr, query, fragmentstr
 end
 
 function Base.haskey(proj::AbstractDataProject, name::AbstractString)
