@@ -190,6 +190,15 @@ project_name(::ActiveDataProject) = _active_project_data_toml()
 
 #-------------------------------------------------------------------------------
 
+function _fill_template(toml_path, toml_str)
+    # Super hacky templating for paths relative to the toml file.
+    # We really should have something a lot nicer here...
+    if Sys.iswindows()
+        toml_path = replace(toml_path, '\\'=>'/')
+    end
+    toml_str = replace(toml_str, "@__DIR__"=>toml_path)
+end
+
 function _load_project(content::AbstractString, sys_data_dir)
     toml_str = _fill_template(sys_data_dir, content)
     config = TOML.parse(toml_str)
