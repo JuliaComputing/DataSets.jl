@@ -58,6 +58,8 @@ name="<driver name>"
 """
 const CURRENT_DATA_CONFIG_VERSION = 1
 
+const ConfigDict = Dict{String,Any}
+
 include("paths.jl")
 include("DataSet.jl")
 include("data_project.jl")
@@ -226,13 +228,14 @@ include("entrypoint.jl")
 # Builtin Data models
 include("FileTree.jl")
 
-# Builtin backends
+# Builtin data drivers
 include("filesystem.jl")
 include("TomlDataStorage.jl")
-
-# Backends
 # include("ZipTree.jl")
 # include("GitTree.jl")
+
+add_storage_driver("FileSystem"=>FileSystemDriver())
+add_storage_driver("TomlDataStorage"=>TomlDataDriver())
 
 # Application-level stuff
 include("repl.jl")

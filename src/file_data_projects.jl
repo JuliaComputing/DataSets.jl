@@ -154,6 +154,50 @@ function config!(proj::AbstractTomlFileDataProject, dataset::DataSet; kws...)
     return dataset
 end
 
+function create(proj::AbstractTomlFileDataProject, name;
+        # One of the following required
+        source::Union{Nothing,DataSet}=nothing,
+        driver::Union{Nothing,AbstractString}=nothing,
+        linked = false,
+        # Descriptive metadata
+        kws...
+    )
+
+    if isnothing(project_name(proj))
+        return nothing
+    end
+
+    if haskey(proj, name)
+        throw(ArgumentError("DataSet named \"$name\" already exists in project."))
+    end
+
+    driver = linked && !isnothing(source) ? _find_driver(source) :
+             !isnothing(driver)           ? _find_driver(driver) :
+             default_driver(proj)
+
+    if linked
+        storage = deepcopy(source.storage)
+    else
+        storage = create_storage(proj, driver, name; source=source, kws...)
+    end
+
+    conf = Dict(
+        "name"=>name,
+        "uuid"=>string(uuid4()),
+        "storage"=>storage
+    )
+
+    conf["linked"] = linked
+    for (k,v) in kws
+        conf[string(k)] = v
+    end
+
+    ds = DataSet(conf)
+    proj[ds.name] = ds
+    return ds
+end
+
+
 #-------------------------------------------------------------------------------
 """
 Data project which automatically updates based on a TOML file on the local
@@ -182,6 +226,38 @@ function local_data_abspath(proj::TomlFileDataProject, relpath)
 end
 
 project_name(proj::TomlFileDataProject) = proj.path
+
+function Base.setindex!(proj::TomlFileDataProject, data::DataSet, name::AbstractString)
+    p = get_cache(proj)
+    p[name] = data
+    save_project(proj.path, p)
+end
+
+function delete(proj::TomlFileDataProject, name::AbstractString)
+    # FIXME: Make this safe for concurrent use in-process
+    # (or better, between processes?)
+    p = get_cache(proj)
+
+    ds = dataset(p, name)
+    # Assume all datasets which don't have the "linked" property are linked.
+    # This prevents us accidentally deleting data.
+    if get(ds, "linked", true)
+        @info "Linked dataset is preserved on data storage" name
+    else
+        driver = _find_driver(ds)
+        delete_storage(proj, driver, ds)
+    end
+
+    delete(p, name)
+    save_project(proj.path, p)
+end
+
+#-------------------------------------------------------------------------------
+default_driver(proj::AbstractTomlFileDataProject) = FileSystemDriver()
+
+project_root_path(proj) = error("No local path for data project type $(typeof(proj))")
+project_root_path(proj::TomlFileDataProject) = dirname(proj.path)
+
 
 #------------------------------------------------------------------------------
 """

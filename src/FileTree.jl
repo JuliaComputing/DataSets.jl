@@ -1,13 +1,12 @@
-# Many datasets have tree-like indices.  Examples:
+# Many storage systems have tree-like indices.  Examples:
 #
-#        Index        Data
-#
-# * OS:  directories           files
-# * Git: trees                 blobs
-# * S3:  prefixes              blobs
-# * HDF5 group                 typed data
-# * Zip  flattend directory(?) blobs
-#
+# Storage  Index           Data
+# -------  -----------     ----------
+# OS       filesystem      files
+# Git      trees           blobs
+# S3       keys            blobs
+# HDF5     groups          typed data
+# Zip      keys            blobs
 
 import AbstractTrees: AbstractTrees, children
 
@@ -471,6 +470,9 @@ end
 
 # Base.open(::Type{T}, file::File; kws...) where {T} = open(identity, T, file.root, file.path; kws...)
 
+function close_dataset(storage::Union{File,FileTree}, exc=nothing)
+    close_dataset(storage.root)
+end
 
 #-------------------------------------------------------------------------------
 # Path manipulation

@@ -100,6 +100,11 @@ end
     @! open(sys_abspath(root, path); read=read, write=write, kws...)
 end
 
+# FIXME: close() vs close_dataset() ?
+function close_dataset(storage::FileSystemRoot, exc=nothing)
+    # Nothing to do here — data is already on the filesystem.
+end
+
 Base.read(root::FileSystemRoot, path::RelPath, ::Type{T}) where {T} =
     read(sys_abspath(root, path), T)
 Base.read(root::FileSystemRoot, path::RelPath) =
@@ -227,9 +232,10 @@ function Base.setindex!(tree::FileTree{FileSystemRoot},
     return tree
 end
 
-
 #--------------------------------------------------
 # FileSystem storage driver
+struct FileSystemDriver <: AbstractDataDriver
+end
 
 """
     local_data_abspath(project, relpath)
@@ -275,7 +281,8 @@ For FileTree:
     windows_path=\$(absolute_windows_path_to_file)
 ```
 """
-function connect_filesystem(f, config, dataset)
+function open_dataset(driver::FileSystemDriver, dataset, write)
+    config = dataset.storage
     # Paths keys can be in three forms documented above;
     if haskey(config, "path")
         pathstr = config["path"]
@@ -309,10 +316,10 @@ function connect_filesystem(f, config, dataset)
     type = config["type"]
     if type in ("File", "Blob")
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
-        storage = File(FileSystemRoot(path))
+        storage = File(FileSystemRoot(path; write=write))
     elseif type in ("FileTree", "BlobTree")
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
-        storage = FileTree(FileSystemRoot(path))
+        storage = FileTree(FileSystemRoot(path; write=write))
         path = dataspec_fragment_as_path(dataset)
         if !isnothing(path)
             storage = storage[path]
@@ -320,9 +327,72 @@ function connect_filesystem(f, config, dataset)
     else
         throw(ArgumentError("DataSet type $type not supported on the filesystem"))
     end
-    f(storage)
+    return storage
 end
-add_storage_driver("FileSystem"=>connect_filesystem)
+
+function create_storage(proj, driver::FileSystemDriver,
+                        name::AbstractString;
+                        source::Union{Nothing,DataSet}=nothing,
+                        dtype::Union{Nothing,AbstractString}=nothing,
+                        kws...)
+
+    # For other cases here, we're not linking to the original source, but
+    # rather making a copy.
+    if !isnothing(source)
+        dtype = source.storage["type"]
+    else
+        if isnothing(dtype)
+            throw(ArgumentError("Must provide one of `source` or `dtype`."))
+        end
+    end
+
+    has_slashes = '/' in name
+    local_name = has_slashes ?
+                 joinpath(split(name, '/')) :
+                 name
+
+    # project_root_path() will fail
+    data_path = joinpath(project_root_path(proj), local_name)
+    if ispath(data_path)
+        error("Local path already exists: $data_path")
+    end
+
+    if !(dtype in ("Blob", "BlobTree"))
+        error("Unknown storage type for FileSystemDriver: $dtype")
+    end
+
+    # Create file or directory
+    if has_slashes
+        mkpath(dirname(data_path))
+    end
+    if dtype == "Blob"
+        touch(data_path)
+    elseif dtype == "BlobTree"
+        mkdir(data_path)
+    end
+
+    Dict(
+        "driver"=>"FileSystem",
+        "type"=>dtype,
+        "path"=>"@__DIR__/$name",
+    )
+end
+
+
+function delete_storage(proj, driver::FileSystemDriver, ds::DataSet)
+    path = ds.storage["path"]
+    type = ds.storage["type"]
+    if type == "Blob"
+        isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
+        rm(path)
+    elseif type == "BlobTree"
+        isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
+        rm(path, recursive=true)
+    else
+        throw(ArgumentError("DataSet type $type not supported on the filesystem"))
+    end
+end
+
 
 
 
