@@ -42,7 +42,7 @@ function dataset(proj::AbstractDataProject, spec::AbstractString)
     # Enhance dataset with "dataspec" holding URL-like fragment & query
     dataspec = Dict()
     if !isnothing(query)
-        dataspec["query"] = Dict{String,Any}(query)
+        dataspec["query"] = ConfigDict(query)
     end
     if !isnothing(fragmentstr)
         dataspec["fragment"] = fragmentstr
@@ -195,13 +195,13 @@ A in-memory collection of DataSets.
 """
 struct DataProject <: AbstractDataProject
     datasets::Dict{String,DataSet}
-    drivers::Vector{Dict{String,Any}}
+    drivers::Vector{ConfigDict}
 end
 
-DataProject() = DataProject(Dict{String,DataSet}(), Vector{Dict{String,Any}}())
+DataProject() = DataProject(Dict{String,DataSet}(), Vector{ConfigDict}())
 
 DataProject(project::AbstractDataProject) = DataProject(Dict(pairs(project)),
-                                                        Vector{Dict{String,Any}}())
+                                                        Vector{ConfigDict}())
 
 data_drivers(project::DataProject) = project.drivers
 
@@ -220,7 +220,19 @@ function Base.iterate(proj::DataProject, state=nothing)
 end
 
 function Base.setindex!(proj::DataProject, data::DataSet, name::AbstractString)
+    if haskey(proj, name) && proj[name] !== data
+        throw(ArgumentError("Cannot replace existing dataset with name \"$name\". Try DataSets.delete() first."))
+    end
+    if isnothing(data.project)
+        data.project = proj
+    elseif data.project !== proj
+        throw(ArgumentError("DataSet is already owned by a different project"))
+    end
     proj.datasets[name] = data
+end
+
+function delete(proj::DataProject, name::AbstractString)
+    delete!(proj.datasets, name)
 end
 
 #-------------------------------------------------------------------------------
@@ -280,6 +292,25 @@ function Base.show(io::IO, mime::MIME"text/plain", stack::StackedDataProject)
     end
 end
 
+function create(stack::StackedDataProject, name; kws...)
+    for proj in stack.projects
+        ds = create(proj, name; kws...)
+        if !isnothing(ds)
+            return ds
+        end
+    end
+    return nothing
+end
+
+function delete(stack::StackedDataProject, name)
+    for proj in stack.projects
+        if haskey(proj, name)
+            delete(proj, name)
+            return
+        end
+    end
+    throw(ArgumentError("Could not find dataset \"$name\" in project"))
+end
 
 #-------------------------------------------------------------------------------
 """
@@ -325,5 +356,36 @@ function load_project(config::AbstractDict; kws...)
         end
     end
     proj
+end
+
+function save_project(path::AbstractString, proj::DataProject)
+    # TODO: Put this TOML conversion in DataProject ?
+    conf = Dict(
+        "data_config_version"=>CURRENT_DATA_CONFIG_VERSION,
+        "datasets"=>[d.conf for (n,d) in proj.datasets],
+        "drivers"=>proj.drivers
+    )
+    mktemp(dirname(path)) do tmppath, tmpio
+        TOML.print(tmpio, conf)
+        close(tmpio)
+        mv(tmppath, path, force=true)
+    end
+    return nothing
+end
+
+#-------------------------------------------------------------------------------
+# Global versions of the dataset metadata manipulation functions which act on
+# the global dataset PROJECT object.
+
+function create(name::AbstractString; kws...)
+    ds = create(PROJECT, name; kws...)
+    if isnothing(ds)
+        error("Could not create dataset in any available data project")
+    end
+    return ds
+end
+
+function delete(name::AbstractString)
+    delete(PROJECT, name)
 end
 

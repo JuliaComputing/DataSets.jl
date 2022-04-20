@@ -115,6 +115,7 @@ end
 
 Base.getindex(d::DataSet, name::AbstractString) = getindex(d.conf, name)
 Base.haskey(d::DataSet, name::AbstractString) = haskey(d.conf, name)
+Base.get(d::DataSet, name::AbstractString, default) = get(d.conf, name, default)
 
 # Split the fragment section as a '/' separated RelPath
 function dataspec_fragment_as_path(d::DataSet)
@@ -140,44 +141,80 @@ end
 
 #-------------------------------------------------------------------------------
 # Functions for opening datasets
+#
+# In principle we've got the following six variants:
+#
+# Scoped forms:
+#
+#   open(dataset; kws...) do ... MISSING!!
+#   open(T, dataset; kws...) do ...
+#
+# Context manager:
+#
+#   x = open(ctx, dataset; kws...)
+#   x = open(ctx, T, dataset; kws...)
+#
+# Finalizer-based:
+#   x = open(dataset; kws...)
+#   x = open(T, dataset; kws...)
+
 
 # do-block form of open()
-function Base.open(f::Function, as_type, dataset::DataSet)
-    storage_config = dataset.storage
+function Base.open(f::Function, as_type, dataset::DataSet; write=false)
     driver = _find_driver(dataset)
-    driver(storage_config, dataset) do storage
-        open(f, as_type, storage)
+    if driver isa AbstractDataDriver
+        storage = open_dataset(driver, dataset, write)
+        try
+            open(f, as_type, storage, write=write)
+            close_dataset(storage)
+        catch exc
+            close_dataset(storage, exc)
+            rethrow()
+        end
+    else
+        # Old deprecated API
+        storage_config = dataset.storage
+        driver = _find_driver(dataset)
+        driver(storage_config, dataset) do storage
+            open(f, as_type, storage)
+        end
     end
 end
 
 # Contexts-based form of open()
-@! function Base.open(dataset::DataSet)
-    storage_config = dataset.storage
+@! function Base.open(dataset::DataSet; write=false)
     driver = _find_driver(dataset)
-    # Use `enter_do` because drivers don't yet use the ResourceContexts.jl mechanism
-    (storage,) = @! enter_do(driver, storage_config, dataset)
+    if driver isa AbstractDataDriver
+        storage = open_dataset(driver, dataset, write)
+        @defer close_dataset(storage)
+    else
+        # Old deprecated API
+        # Use `enter_do` because drivers are just functions
+        if write
+            error("Cannot use `write=true` with the old storage API.")
+        end
+        storage_config = dataset.storage
+        (storage,) = @! enter_do(driver, storage_config, dataset)
+    end
     storage
 end
 
-@! function Base.open(as_type, dataset::DataSet)
-    storage = @! open(dataset)
-    @! open(as_type, storage)
+@! function Base.open(as_type, dataset::DataSet; write=false)
+    storage = @! open(dataset; write=write)
+    @! open(as_type, storage; write=write)
 end
 
-# TODO:
-#  Consider making a distinction between open() and load().
-
 # Finalizer-based version of open()
-function Base.open(dataset::DataSet)
+function Base.open(dataset::DataSet; write=false)
     @context begin
-        result = @! open(dataset)
+        result = @! open(dataset; write=write)
         @! ResourceContexts.detach_context_cleanup(result)
     end
 end
 
-function Base.open(as_type, dataset::DataSet)
+function Base.open(as_type, dataset::DataSet; write=false)
     @context begin
-        result = @! open(as_type, dataset)
+        result = @! open(as_type, dataset; write=write)
         @! ResourceContexts.detach_context_cleanup(result)
     end
 end

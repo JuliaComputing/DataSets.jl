@@ -1,5 +1,7 @@
 # Global record of registered storage drivers
 
+abstract type AbstractDataDriver end
+
 const _storage_drivers_lock = ReentrantLock()
 const _storage_drivers = Dict{String,Any}()
 
@@ -68,18 +70,24 @@ function add_storage_driver(project::AbstractDataProject)
     end
 end
 
-function _find_driver(dataset)
+function _find_driver(dataset::DataSet)
     storage_config = dataset.storage
     driver_name = get(storage_config, "driver") do
         error("`storage.driver` configuration not found for dataset $(dataset.name)")
     end
+    driver = _find_driver(driver_name)
+    if isnothing(driver)
+        error("""
+            Storage driver $(repr(driver_name)) not found for dataset $(dataset.name).
+            Current drivers are $(collect(keys(_storage_drivers)))
+            """)
+    end
+    return driver
+end
+
+function _find_driver(driver_name::AbstractString)
     driver = lock(_storage_drivers_lock) do
-        get(_storage_drivers, driver_name) do
-            error("""
-                  Storage driver $(repr(driver_name)) not found for dataset $(dataset.name).
-                  Current drivers are $(collect(keys(_storage_drivers)))
-                  """)
-        end
+        get(_storage_drivers, driver_name, nothing)
     end
 end
 

@@ -1,12 +1,12 @@
-# Many datasets have tree-like indices.  Examples:
+# Many storage systems have tree-like indices.  Examples:
 #
-#        Index        Data
-#
-# * OS:  directories           files
-# * Git: trees                 blobs
-# * S3:  prefixes              blobs
-# * HDF5 group                 typed data
-# * Zip  flattend directory(?) blobs
+# Storage  Index           Data
+# -------  -----------     ----------
+# OS       filesystem      files
+# Git      trees           blobs
+# S3       keys            blobs
+# HDF5     groups          typed data
+# Zip      keys            blobs
 #
 
 import AbstractTrees: AbstractTrees, children
@@ -359,7 +359,7 @@ function children(tree::BlobTree)
     [tree[c] for c in child_names]
 end
 
-function Base.open(f::Function, ::Type{BlobTree}, tree::BlobTree)
+function Base.open(f::Function, ::Type{BlobTree}, tree::BlobTree; kws...)
     f(tree)
 end
 
@@ -368,3 +368,41 @@ end
 end
 
 # Base.open(::Type{T}, file::Blob; kws...) where {T} = open(identity, T, file.root, file.path; kws...)
+
+function close_dataset(storage::Union{Blob,BlobTree}, exc=nothing)
+    close_dataset(storage.root)
+end
+
+#-------------------------------------------------------------------------------
+# Path manipulation
+
+# TODO: Maybe deprecate these? Under the "datastructure-like" model, it seems wrong
+# for a blob to know its name in the parent data structure.
+Base.basename(tree::BlobTree) = basename(tree.path)
+Base.abspath(tree::BlobTree) = AbsPath(tree.root, tree.path)
+
+function Base.joinpath(tree::BlobTree, r::RelPath)
+    AbsPath(tree.root, joinpath(tree.path, r))
+end
+
+function Base.joinpath(tree::BlobTree, s::AbstractString)
+    AbsPath(tree.root, joinpath(tree.path, s))
+end
+
+
+#-------------------------------------------------------------------------------
+# Deprecated
+function Base.rm(tree::BlobTree; kws...)
+    _check_writeable(tree)
+    rm(tree.root, tree.path; kws...)
+end
+
+function Base.readdir(tree::BlobTree)
+    readdir(tree.root, tree.path)
+end
+
+# Create files within a temporary directory.
+# TODO: Deprecate in order to encourage the in-place version.
+newdir(tree::BlobTree) = newdir(tree.root)
+newfile(tree::BlobTree) = newfile(tree.root)
+
