@@ -115,6 +115,8 @@ function Base.show(io::IO, d::DataSet)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
+    println(io, "DataSet instance:")
+    println(io)
     TOML.print(io, d.conf)
 end
 
