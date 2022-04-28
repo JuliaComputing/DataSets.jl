@@ -223,7 +223,7 @@ include("BlobTree.jl")
 
 # Builtin backends
 include("filesystem.jl")
-include("DataTomlStorage.jl")
+include("TomlDataStorage.jl")
 
 # Backends
 # include("ZipTree.jl")

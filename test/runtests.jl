@@ -176,6 +176,6 @@ end
 include("projects.jl")
 include("entrypoint.jl")
 include("repl.jl")
-include("DataTomlStorage.jl")
+include("TomlDataStorage.jl")
 include("backend_compat.jl")
 include("driver_autoload.jl")
