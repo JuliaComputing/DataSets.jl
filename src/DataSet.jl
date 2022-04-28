@@ -88,8 +88,10 @@ end
 function make_valid_dataset_name(name)
     if !is_valid_dataset_name(name)
         name = replace(name, r"^[^[:alpha:]]+"=>"")
+        name = replace(name, '\\'=>'/')
         name = replace(name, r"[^-[:alnum:]_/]"=>"_")
         if !is_valid_dataset_name(name)
+            # best-effort fallback
             name = "data"
         end
     end

@@ -119,6 +119,16 @@ end
     @test !DataSets.is_valid_dataset_name("/a/b")
     # Error message for invalid names
     @test_throws ErrorException("DataSet name \"a?b\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `_` or `/`.") DataSets.check_dataset_name("a?b")
+
+    # Making valid names from path-like things
+    @test DataSets.make_valid_dataset_name("a/b") == "a/b"
+    @test DataSets.make_valid_dataset_name("a1") == "a1"
+    @test DataSets.make_valid_dataset_name("1a") == "a"
+    @test DataSets.make_valid_dataset_name("//a/b") == "a/b"
+    @test DataSets.make_valid_dataset_name("a..b") == "a__b"
+    @test DataSets.make_valid_dataset_name("C:\\a\\b") == "C_/a/b"
+    # fallback
+    @test DataSets.make_valid_dataset_name("a//b") == "data"
 end
 
 @testset "URL-like dataspec parsing" begin
