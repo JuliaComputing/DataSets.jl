@@ -172,6 +172,9 @@ The `DataSet` is *metadata*, but to use the actual *data* in your program you
 need to use the `open` function to access the `DataSet`'s content as a given
 Julia type.
 
+`name` is the name of the dataset, or more generally a "data specification": a
+URI-like object of the form `namespace/name?params#fragment`.
+
 # Example
 
 To open a dataset named `"a_text_file"` and read the whole content as a String,

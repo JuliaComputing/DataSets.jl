@@ -25,7 +25,6 @@ function Base.getindex(proj::AbstractDataProject, name::AbstractString)
     data
 end
 
-
 function dataset(proj::AbstractDataProject, spec::AbstractString)
     namestr, query, fragmentstr = _split_dataspec(spec)
 

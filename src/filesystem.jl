@@ -41,7 +41,7 @@ Base.readdir(root::AbstractFileSystemRoot, path::RelPath) = readdir(sys_abspath(
 
 function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)
     if !iswriteable(root)
-        error("Cannot make directory in read-only tree root at $(sys_abspath(p.root))")
+        error("Cannot make directory in read-only tree")
     end
     mkdir(sys_abspath(root, path), args...)
     return BlobTree(root, path)
@@ -49,6 +49,13 @@ end
 
 function Base.rm(root::AbstractFileSystemRoot, path::RelPath; kws...)
     rm(sys_abspath(root,path); kws...)
+end
+
+function Base.delete!(root::AbstractFileSystemRoot, path::RelPath)
+    if !iswriteable(root)
+        error("Cannot delete from read-only tree $root")
+    end
+    rm(sys_abspath(root,path); recursive=true)
 end
 
 #--------------------------------------------------
@@ -96,15 +103,15 @@ For BlobTree:
 """
 struct FileSystemRoot <: AbstractFileSystemRoot
     path::String
-    read::Bool
     write::Bool
 end
 
-function FileSystemRoot(path::AbstractString; write=false, read=true)
+function FileSystemRoot(path::AbstractString; write=false)
     path = abspath(path)
-    FileSystemRoot(path, read, write)
+    FileSystemRoot(path, write)
 end
 
+iswriteable(root) = false
 iswriteable(root::FileSystemRoot) = root.write
 
 sys_abspath(root::FileSystemRoot) = root.path
@@ -114,7 +121,7 @@ function Base.abspath(relpath::RelPath)
         `abspath(::RelPath)` defaults to using `pwd()` as the root of the path
         but this leads to fragile code so will be removed in the future""",
         :abspath)
-    AbsPath(FileSystemRoot(pwd(); write=true, read=true), relpath)
+    AbsPath(FileSystemRoot(pwd(); write=true), relpath)
 end
 
 #-------------------------------------------------------------------------------
@@ -141,46 +148,73 @@ end
 iswriteable(root::TempFilesystemRoot) = true
 sys_abspath(root::TempFilesystemRoot) = root.path
 
-"""
-    newdir()
-
-Create a new temporary `BlobTree` which can have files assigned into it and may
-be assigned to a permanent location in a persistent `BlobTree`. If not assigned
-to a permanent location, the temporary tree is cleaned up during garbage
-collection.
-"""
-function newdir(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
+function newdir()
     # cleanup=false: we manage our own cleanup via the finalizer
+    path = mktempdir(cleanup=false)
+    return BlobTree(TempFilesystemRoot(path))
+end
+
+function newdir(root::AbstractFileSystemRoot, path::RelPath; overwrite=false)
+    p = sys_abspath(root, path)
+    if overwrite
+        rm(p, force=true, recursive=true)
+    end
+    mkpath(p)
+end
+
+
+function newfile(func=nothing)
+    path, io = mktemp(cleanup=false)
+    if func !== nothing
+        try
+            func(io)
+        catch
+            rm(path)
+            rethrow()
+        finally
+            close(io)
+        end
+    end
+    return Blob(TempFilesystemRoot(path))
+end
+
+function newfile(f::Function, root::AbstractFileSystemRoot, path::RelPath; kws...)
+    p = sys_abspath(root, path)
+    mkpath(dirname(p))
+    open(f, p, write=true)
+end
+
+function newfile(root::AbstractFileSystemRoot, path::RelPath; kws...)
+    newfile(io->nothing, root, path; kws...)
+end
+
+#-------------------------------------------------------------------------------
+# Deprecated newdir() and newfile() variants
+function newdir(ctx::AbstractFileSystemRoot)
+    Base.depwarn("""
+        `newdir(ctx::AbstractFileSystemRoot)` is deprecated. Use the in-place
+        version `newdir(::BlobTree, path)` instead.
+        """, :newdir)
     path = mktempdir(sys_abspath(ctx), cleanup=false)
     return BlobTree(TempFilesystemRoot(path))
 end
-newdir(ctx::BlobTree) = newdir(ctx.root)
 
-function newfile(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
+function newfile(ctx::AbstractFileSystemRoot)
+    Base.depwarn("""
+        `newfile(ctx::AbstractFileSystemRoot)` is deprecated. Use the in-place
+        version `newfile(::BlobTree, path)` instead.
+        """, :newfile)
     path, io = mktemp(sys_abspath(ctx), cleanup=false)
     close(io)
     return Blob(TempFilesystemRoot(path))
 end
-newfile(ctx::BlobTree) = newfile(ctx.root)
 
-"""
-    newfile(func)
-    newfile(func, ctx)
-
-Create a new temporary `Blob` object which may be later assigned to a permanent
-location in a `BlobTree`. If not assigned to a permanent location, the
-temporary file is cleaned up during garbage collection.
-
-# Example
-
-```
-tree[path"some/demo/path.txt"] = newfile() do io
-    println(io, "Hi there!")
-end
-```
-"""
-function newfile(f::Function, ctx=FileSystemRoot(tempdir(), write=true))
-    path, io = mktemp(sys_abspath(ctx), cleanup=false)
+function newfile(f::Function, root::FileSystemRoot)
+    Base.depwarn("""
+        `newfile(f::Function, ctx::AbstractFileSystemRoot)` is deprecated.
+        Use newfile() or the in-place version `newfile(::BlobTree, path)` instead.
+        """, :newfile)
+    path, io = mktemp(sys_abspath(root), cleanup=false)
     try
         f(io)
     catch

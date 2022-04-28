@@ -44,22 +44,6 @@ function Base.iterate(tree::AbstractBlobTree, state=nothing)
 end
 
 """
-    children(tree::AbstractBlobTree)
-
-Return an array of the children of `tree`. A child `x` may abstractly either be
-another tree (`children(x)` returns a collection) or a file, where `children(x)`
-returns `()`.
-
-Note that this is subtly different from `readdir(path)` which returns relative
-paths, or `readdir(path, join=true)` which returns absolute paths.
-"""
-function children(tree::AbstractBlobTree)
-    # TODO: Is dispatch to the root a correct default?
-    children(tree.root, tree.path)
-end
-
-
-"""
     showtree([io,], tree)
 
 Pretty printing of file trees, in the spirit of the unix `tree` utility.
@@ -100,13 +84,12 @@ end
 
 function Base.copy!(dst::AbstractBlobTree, src::AbstractBlobTree)
     for x in src
-        newpath = joinpath(dst, basename(x))
+        xname = basename(x)
         if isdir(x)
-            newdir = mkdir(newpath)
-            copy!(newdir, x)
+            copy!(newdir(dst, xname), x)
         else
             open(x) do io_src
-                open(newpath, write=true) do io_dst
+                newfile(dst, xname, write=true) do io_dst
                     write(io_dst, io_src)
                 end
             end
@@ -247,29 +230,59 @@ The tree implements the `AbstracTrees.children()` interface and may be indexed
 with paths to traverse the hierarchy down to the leaves ("files") which are of
 type `Blob`. Individual leaves may be `open()`ed as various Julia types.
 
+# Operations on BlobTree
+
+BlobTree has a largely dictionary-like interface:
+
+* List keys (ie, file and directory names): `keys(tree)`
+* List keys and values:  `pairs(tree)`
+* Query keys:            `haskey(tree)`
+* Traverse the tree:     `tree["path"]`
+* Add new content:       `newdir(tree, "path")`, `newfile(tree, "path")`
+* Delete content:        `delete!(tree, "path")`
+
+Unlike Dict, iteration of BlobTree iterates values (not key value pairs). This
+has some benefits - for example, broadcasting processing across files in a
+directory.
+
+* Property access
+  - `isdir()`, `isfile()` - determine whether a child of tree is a directory or file.
+
 # Example
 
-Normally you'd construct these via the [`dataset`](@ref) function which takes
-care of constructing the correct `root` object. However, here's a direct
-demonstration:
+You can create a new temporary BlobTree via the `newdir()` function:
 
 ```
-julia> tree = BlobTree(DataSets.FileSystemRoot(dirname(pathof(DataSets))), path"../test/data")
-📂 Tree ../test/data @ /home/chris/.julia/dev/DataSets/src
- 📁 csvset
- 📄 file.txt
- 📄 foo.txt
- 📄 people.csv.gz
+julia> dir = newdir()
+       for i = 1:3
+           newfile(dir, "\$i/a.txt") do io
+               println(io, "Content of a")
+           end
+           newfile(dir, "b-\$i.txt") do io
+               println(io, "Content of b")
+           end
+       end
+       dir
+📂 Tree  @ /tmp/jl_Sp6wMF
+ 📁 1
+ 📁 2
+ 📁 3
+ 📄 b-1.txt
+ 📄 b-2.txt
+ 📄 b-3.txt
+```
 
-julia> tree["csvset"]
-📂 Tree ../test/data/csvset @ /home/chris/.julia/dev/DataSets/src
- 📄 1.csv
- 📄 2.csv
+You can also get access to a `BlobTree` by using `DataSets.from_path()` with a
+local directory name. For example:
 
-julia> tree[path"csvset"]
-📂 Tree ../test/data/csvset @ /home/chris/.julia/dev/DataSets/src
- 📄 1.csv
- 📄 2.csv
+```
+julia> using Pkg
+       open(DataSets.from_path(joinpath(Pkg.dir("DataSets"), "src")))
+📂 Tree  @ ~/.julia/dev/DataSets/src
+ 📄 DataSet.jl
+ 📄 DataSets.jl
+ 📄 DataTomlStorage.jl
+ ...
 ```
 """
 mutable struct BlobTree{Root} <: AbstractBlobTree
@@ -279,32 +292,31 @@ end
 
 BlobTree(root) = BlobTree(root, RelPath())
 
-function AbstractTrees.printnode(io::IO, tree::BlobTree)
-    print(io, "📂 ",  basename(tree))
-end
-
-function Base.show(io::IO, ::MIME"text/plain", tree::AbstractBlobTree)
+function Base.show(io::IO, ::MIME"text/plain", tree::BlobTree)
     # TODO: Ideally we'd use
     # AbstractTrees.print_tree(io, tree, 1)
     # However, this is hard to use efficiently; we'd need to implement a lazy
     # `children()` for all our trees. It'd be much easier if
     # `AbstractTrees.has_children()` was used consistently upstream.
-    cs = children(tree)
     println(io, "📂 Tree ", tree.path, " @ ", summary(tree.root))
-    for (i, c) in enumerate(cs)
-        print(io, " ", isdir(c) ? '📁' : '📄', " ", basename(c))
-        if i != length(cs)
+    first = true
+    for (name,x) in pairs(tree)
+        if first
+            first = false
+        else
             print(io, '\n')
         end
+        print(io, " ", isdir(x) ? '📁' : '📄', " ", name)
     end
 end
 
-Base.basename(tree::BlobTree) = basename(tree.path)
-Base.abspath(tree::BlobTree) = AbsPath(tree.root, tree.path)
+function AbstractTrees.printnode(io::IO, tree::BlobTree)
+    print(io, "📂 ",  basename(tree))
+end
 
 # getindex vs joinpath:
-#  - getindex about indexing the datastrcutre; therefore it looks in the
-#    filesystem to only return things which exist.
+#  - getindex is about indexing the datastructure; therefore it looks in the
+#    storage system to only return things which exist.
 #  - joinpath just makes paths, not knowing whether they exist.
 function Base.getindex(tree::BlobTree, path::RelPath)
     relpath = joinpath(tree.path, path)
@@ -323,40 +335,129 @@ function Base.getindex(tree::BlobTree, path::RelPath)
 end
 
 function Base.getindex(tree::BlobTree, name::AbstractString)
-    getindex(tree, joinpath(RelPath(), name))
+    getindex(tree, RelPath(name))
 end
 
-# We've got a weird mishmash of path vs tree handling here.
-# TODO: Can we refactor this to cleanly separate the filesystem-like commands
-# (which take abstract paths?) from BlobTree and Blob which act as an
-# abstraction over the filesystem or other storage mechanisms?
-function Base.joinpath(tree::BlobTree, r::RelPath)
-    AbsPath(tree.root, joinpath(tree.path, r))
+
+# Keys, values and iteration
+
+"""
+    children(tree::BlobTree)
+
+Return an array of the children of `tree`. A child `x` may abstractly either be
+another tree (`children(x)` returns a collection) or a file, where `children(x)`
+returns `()`.
+"""
+function children(tree::BlobTree)
+    [tree[RelPath([n])] for n in keys(tree)]
 end
 
-function Base.joinpath(tree::BlobTree, s::AbstractString)
-    AbsPath(tree.root, joinpath(tree.path, s))
+function Base.haskey(tree::BlobTree, path::AbstractString)
+    haskey(tree, RelPath(path))
 end
 
-function Base.haskey(tree::BlobTree, name::AbstractString)
-    ispath(tree.root, joinpath(tree.path, name))
-end
-
-function Base.readdir(tree::BlobTree)
-    readdir(tree.root, tree.path)
+function Base.haskey(tree::BlobTree, path::RelPath)
+    ispath(tree.root, joinpath(tree.path, path))
 end
 
 function Base.keys(tree::BlobTree)
     readdir(tree.root, tree.path)
 end
 
-function Base.rm(tree::BlobTree; kws...)
-    rm(tree.root, tree.path; kws...)
+function Base.pairs(tree::BlobTree)
+    zip(keys(tree), children(tree))
 end
 
-function children(tree::BlobTree)
-    child_names = readdir(tree)
-    [tree[c] for c in child_names]
+function Base.values(tree::BlobTree)
+    children(tree)
+end
+
+
+# Mutation
+
+newdir(tree::BlobTree, path::AbstractString; kws...) =
+    newdir(tree, RelPath(path); kws...)
+newfile(tree::BlobTree, path::AbstractString; kws...) =
+    newfile(tree, RelPath(path); kws...)
+newfile(func::Function, tree::BlobTree, path::AbstractString; kws...) =
+    newfile(func, tree, RelPath(path); kws...)
+Base.delete!(tree::BlobTree, path::AbstractString) =
+    delete!(tree, RelPath(path))
+
+function _check_writeable(tree)
+    if !iswriteable(tree.root)
+        error("Attempt to write into a read-only tree with root $(tree.root)")
+    end
+end
+
+function _check_new_item(tree, path, overwrite)
+    _check_writeable(tree)
+    if haskey(tree, path) && !overwrite
+        error("Overwriting a path $path which already exists requires the keyword `overwrite=true`")
+    end
+end
+
+"""
+    newdir(tree, path; overwrite=false)
+
+Create a new directory at tree[path] and return it. If `overwrite=true`, remove
+any existing directory before creating the new one.
+
+    newdir()
+
+Create a new temporary `BlobTree` which can have files assigned into it and may
+be assigned to a permanent location in a persistent `BlobTree`. If not assigned
+to a permanent location, the temporary tree is cleaned up during garbage
+collection.
+"""
+function newdir(tree::BlobTree, path::RelPath; overwrite=false)
+    _check_new_item(tree, path, overwrite)
+    p = joinpath(tree.path, RelPath(path))
+    newdir(tree.root, p; overwrite=overwrite)
+    return BlobTree(tree.root, p)
+end
+
+"""
+    newfile(tree, path; overwrite=false)
+    newfile(tree, path; overwrite=false) do io ...
+
+Create a new file object in the `tree` at the given `path`. In the second form,
+the open file `io` will be passed to the do block.
+
+    newfile()
+
+Create a new file which may be later assigned to a permanent location in a
+tree. If not assigned to a permanent location, the temporary file is cleaned up
+during garbage collection.
+
+# Example
+
+```
+newfile(tree, "some/demo/path.txt") do io
+    println(io, "Hi there!")
+end
+```
+"""
+function newfile(tree::BlobTree, path::RelPath; overwrite=false)
+    _check_new_item(tree, path, overwrite)
+    p = joinpath(tree.path, path)
+    newfile(tree.root, p; overwrite=overwrite)
+    return Blob(tree.root, p)
+end
+
+function newfile(func::Function, tree::BlobTree, path::RelPath; overwrite=false)
+    _check_new_item(tree, path, overwrite)
+    p = joinpath(tree.path, path)
+    newfile(func, tree.root, p; overwrite=overwrite)
+    return Blob(tree.root, p)
+end
+
+
+function Base.delete!(tree::BlobTree, path::RelPath)
+    _check_writeable(tree)
+    relpath = joinpath(tree.path, path)
+    root = tree.root
+    delete!(root, relpath)
 end
 
 function Base.open(f::Function, ::Type{BlobTree}, tree::BlobTree)
@@ -368,3 +469,51 @@ end
 end
 
 # Base.open(::Type{T}, file::Blob; kws...) where {T} = open(identity, T, file.root, file.path; kws...)
+
+
+#-------------------------------------------------------------------------------
+# Path manipulation
+
+# TODO: Maybe deprecate these? Under the "datastructure-like" model, it seems wrong
+# for a blob to know its name in the parent data structure.
+Base.basename(tree::BlobTree) = basename(tree.path)
+Base.abspath(tree::BlobTree) = AbsPath(tree.root, tree.path)
+
+function Base.joinpath(tree::BlobTree, r::RelPath)
+    AbsPath(tree.root, joinpath(tree.path, r))
+end
+
+function Base.joinpath(tree::BlobTree, s::AbstractString)
+    AbsPath(tree.root, joinpath(tree.path, s))
+end
+
+
+#-------------------------------------------------------------------------------
+# Deprecated
+function Base.rm(tree::BlobTree; kws...)
+    _check_writeable(tree)
+    rm(tree.root, tree.path; kws...)
+end
+
+function Base.readdir(tree::BlobTree)
+    readdir(tree.root, tree.path)
+end
+
+# Create files within a temporary directory.
+function newdir(tree::BlobTree)
+    Base.depwarn("""
+        `newdir(::BlobTree)` for temporary trees is deprecated.
+        Use the in-place version `newdir(::BlobTree, dirname)` instead.
+        """,
+        :newdir)
+    newdir(tree.root)
+end
+function newfile(tree::BlobTree)
+    Base.depwarn("""
+        `newfile(::BlobTree)` for temporary trees is deprecated.
+        Use the in-place version `newfile(::BlobTree, dirname)` instead.
+        """,
+        :newfile)
+    newfile(tree.root)
+end
+

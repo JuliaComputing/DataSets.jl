@@ -18,7 +18,7 @@ struct RelPath <: AbstractPath
     components::Vector{String}
 end
 
-RelPath(::AbstractString) = error("RelPath(::String) is not defined to avoid ambiguities between operating systems. Use  the `path\"...\"` string macro for path literals.")
+RelPath(str::AbstractString) = RelPath(split(str, '/'))
 RelPath(components::AbstractVector=String[]) = RelPath(convert(Vector{String}, components))
 
 # Path manipulation.
@@ -73,7 +73,7 @@ end
 """
     An AbsPath is the *key* into a hierarchical tree index, relative to some root.
 
-As a *key*, the resource pointed to by this key may or may not exist.
+The path is only a key; the resource pointed to by this key may or may not exist.
 """
 struct AbsPath{Root} <: AbstractPath
     root::Root
