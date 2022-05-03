@@ -205,3 +205,35 @@ function _load_project(content::AbstractString, sys_data_dir)
     load_project(config)
 end
 
+#-------------------------------------------------------------------------------
+"""
+    from_path(path)
+
+Create a `DataSet` from a local filesystem path. The type of the dataset is
+inferred as a blob or tree based on whether the local path is a file or
+directory.
+"""
+function from_path(path::AbstractString)
+    dtype = isfile(path) ? "Blob"     :
+            isdir(path)  ? "BlobTree" :
+            nothing
+
+    if isnothing(dtype)
+        msg = ispath(path) ?
+            "Unrecognized data at path \"$path\"" :
+            "Path \"$path\" does not exist"
+        throw(ArgumentError(msg))
+    end
+
+    conf = Dict(
+        "name"=>make_valid_dataset_name(path),
+        "uuid"=>string(uuid4()),
+        "storage"=>Dict(
+            "driver"=>"FileSystem",
+            "type"=>dtype,
+            "path"=>abspath(path),
+        )
+    )
+
+    DataSet(conf)
+end

@@ -59,7 +59,7 @@ function _check_keys(config, context, keys)
 end
 
 """
-    check_dataset_name(name)
+    is_valid_dataset_name(name)
 
 Check whether a dataset name is valid. Valid names include start with a letter
 and may contain letters, numbers or `_`. Names may be hieracicial, with pieces
@@ -70,19 +70,36 @@ separated with forward slashes. Examples:
     username/data
     organization/project/data
 """
-function check_dataset_name(name::AbstractString)
+function is_valid_dataset_name(name::AbstractString)
     # DataSet names disallow most punctuation for now, as it may be needed as
     # delimiters in data-related syntax (eg, for the data REPL).
     dataset_name_pattern = r"
         ^
         [[:alpha:]]
         (?:
-            [[:alnum:]_]      |
+            [-[:alnum:]_]     |
             / (?=[[:alpha:]])
         )*
         $
         "x
-    if !occursin(dataset_name_pattern, name)
+    return occursin(dataset_name_pattern, name)
+end
+
+function make_valid_dataset_name(name)
+    if !is_valid_dataset_name(name)
+        name = replace(name, r"^[^[:alpha:]]+"=>"")
+        name = replace(name, '\\'=>'/')
+        name = replace(name, r"[^-[:alnum:]_/]"=>"_")
+        if !is_valid_dataset_name(name)
+            # best-effort fallback
+            name = "data"
+        end
+    end
+    return name
+end
+
+function check_dataset_name(name::AbstractString)
+    if !is_valid_dataset_name(name)
         error("DataSet name \"$name\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `_` or `/`.")
     end
 end
