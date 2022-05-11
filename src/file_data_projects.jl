@@ -4,8 +4,8 @@ A cache of file content, parsed with an arbitrary parser function.
 
 This is a modified and generalized version of `Base.CachedTOMLDict`.
 
-Getting the value of the cache with `f[]` will automatically update the parsed
-value whenever the file changes.
+Getting the value of the cache with `get_cache(f)` will automatically update
+the parsed value whenever the file changes.
 """
 mutable struct CachedParsedFile{T}
     path::String
@@ -38,7 +38,7 @@ function CachedParsedFile{T}(parser::Function, path::String) where T
     )
 end
 
-function Base.getindex(f::CachedParsedFile)
+function get_cache(f::CachedParsedFile, allow_refresh=true)
     s = stat(f.path)
     time_since_cached = time() - f.mtime
     rough_mtime_granularity = 0.1 # seconds
@@ -59,6 +59,9 @@ function Base.getindex(f::CachedParsedFile)
             f.mtime = s.mtime
             f.size = s.size
             f.hash = new_hash
+            if !allow_refresh
+                error("The file at $(f.path) was written externally")
+            end
             @debug "Cache of file $(repr(f.path)) invalid, reparsing..."
             return f.d = f.parser(content)
         end
@@ -68,17 +71,21 @@ end
 
 function Base.show(io::IO, m::MIME"text/plain", f::CachedParsedFile)
     println(io, "Cache of file $(repr(f.path)) with value")
-    show(io, m, f[])
+    show(io, m, get_cache(f))
 end
 
 # Parse Data.toml into DataProject which updates when the file does.
-function parse_and_cache_project(sys_path::AbstractString)
+function parse_and_cache_project(proj, sys_path::AbstractString)
     sys_data_dir = dirname(sys_path)
     CachedParsedFile{DataProject}(sys_path) do content
         if isnothing(content)
             DataProject()
         else
-            _load_project(String(content), sys_data_dir)
+            inner_proj = _load_project(String(content), sys_data_dir)
+            for d in inner_proj
+                d.project = proj
+            end
+            inner_proj
         end
     end
 end
@@ -87,19 +94,19 @@ end
 abstract type AbstractTomlFileDataProject <: AbstractDataProject end
 
 function Base.get(proj::AbstractTomlFileDataProject, name::AbstractString, default)
-    get(_get_cached(proj), name, default)
+    get(get_cache(proj), name, default)
 end
 
 function Base.keys(proj::AbstractTomlFileDataProject)
-    keys(_get_cached(proj))
+    keys(get_cache(proj))
 end
 
 function Base.iterate(proj::AbstractTomlFileDataProject, state=nothing)
     # This is a little complex because we want iterate to work even if the
     # active project changes concurrently, which means wrapping up the initial
-    # result of _get_cached with the iterator state.
+    # result of get_cache with the iterator state.
     if isnothing(state)
-        cached_values = values(_get_cached(proj))
+        cached_values = values(get_cache(proj))
         if isnothing(cached_values)
             return nothing
         end
@@ -116,9 +123,20 @@ function Base.iterate(proj::AbstractTomlFileDataProject, state=nothing)
     end
 end
 
-Base.pairs(proj::AbstractTomlFileDataProject) = pairs(_get_cached(proj))
+Base.pairs(proj::AbstractTomlFileDataProject) = pairs(get_cache(proj))
 
-data_drivers(proj::AbstractTomlFileDataProject) = data_drivers(_get_cached(proj))
+data_drivers(proj::AbstractTomlFileDataProject) = data_drivers(get_cache(proj))
+
+function config(proj::AbstractTomlFileDataProject, dataset::DataSet; kws...)
+    if dataset.project !== proj
+        error("dataset must belong to project")
+    end
+    # Here we accept the update independently of the project - Data.toml should
+    # be able to manage any dataset config.
+    config(nothing, dataset; kws...)
+    save_project(proj.path, get_cache(proj, false))
+    return dataset
+end
 
 #-------------------------------------------------------------------------------
 """
@@ -128,15 +146,15 @@ filesystem.
 mutable struct TomlFileDataProject <: AbstractTomlFileDataProject
     path::String
     cache::CachedParsedFile{DataProject}
+    function TomlFileDataProject(path::String)
+        proj = new(path)
+        proj.cache = parse_and_cache_project(proj, path)
+        proj
+    end
 end
 
-function TomlFileDataProject(path::String)
-    cache = parse_and_cache_project(path)
-    TomlFileDataProject(path, cache)
-end
-
-function _get_cached(proj::TomlFileDataProject)
-    proj.cache[]
+function get_cache(proj::TomlFileDataProject, refresh=true)
+    get_cache(proj.cache, refresh)
 end
 
 project_name(proj::TomlFileDataProject) = proj.path
@@ -160,7 +178,7 @@ end
 
 function ActiveDataProject()
     proj = ActiveDataProject(nothing, DataProject())
-    _get_cached(proj)
+    get_cache(proj)
     proj
 end
 
@@ -170,20 +188,23 @@ function _active_project_data_toml(project_path=Base.active_project(false))
         joinpath(dirname(project_path), "Data.toml")
 end
 
-function _get_cached(proj::ActiveDataProject)
+function get_cache(proj::ActiveDataProject, allow_refresh=true)
     active_project = Base.active_project(false)
     if proj.active_project_path != active_project
+        if !allow_refresh
+            error("The current project path was changed")
+        end
         # The unusual case: active project has changed.
         if isnothing(active_project)
             proj.cache = DataProject()
         else
             data_toml = _active_project_data_toml(active_project)
             # Need to re-cache
-            proj.cache = parse_and_cache_project(data_toml)
+            proj.cache = parse_and_cache_project(proj, data_toml)
         end
         proj.active_project_path = active_project
     end
-    proj.cache isa DataProject ? proj.cache : proj.cache[]
+    proj.cache isa DataProject ? proj.cache : get_cache(proj.cache, allow_refresh)
 end
 
 project_name(::ActiveDataProject) = _active_project_data_toml()

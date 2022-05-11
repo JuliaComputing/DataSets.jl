@@ -52,9 +52,37 @@ function dataset(proj::AbstractDataProject, spec::AbstractString)
     conf = copy(dataset.conf)
     conf["dataspec"] = dataspec
 
+    # This copy is problematic now that datasets can be mutated: how can the
+    # dataset point back to its project without "dataspec" being updated?
     return DataSet(conf)
 end
 
+"""
+    config(name::AbstractString; kws...)
+    config(proj::AbstractDataProject, name::AbstractString; kws...)
+
+    config(dataset::DataSet; kws...)
+
+Update the configuration of `dataset` with the given keyword arguments and
+persist it in the dataset's project storage. The versions which take a `name`
+use that name to search within the given data project.
+
+# Examples
+
+Update the dataset with name "SomeData" in the global project
+```
+DataSets.config("SomeData"; description="This is a description")
+```
+
+Tag the dataset "SomeData" with tags "A" and "B".
+```
+ds = dataset("SomeData")
+config(ds, tags=["A", "B"])
+```
+"""
+function config(project::AbstractDataProject, name::AbstractString; kws...)
+    config(project[name]; kws...)
+end
 
 # Percent-decode a string according to the URI escaping rules.
 # Vendored from URIs.jl for now to avoid depending on that entire package for
@@ -312,7 +340,7 @@ function load_project(config::AbstractDict; kws...)
     end
     proj = DataProject()
     for dataset_conf in config["datasets"]
-        dataset = DataSet(dataset_conf)
+        dataset = DataSet(proj, dataset_conf)
         proj[dataset.name] = dataset
     end
     if haskey(config, "drivers")
@@ -326,3 +354,20 @@ function load_project(config::AbstractDict; kws...)
     proj
 end
 
+function save_project(path::AbstractString, proj::DataProject)
+    # TODO: Put this TOML conversion in DataProject ?
+    conf = Dict(
+        "data_config_version"=>CURRENT_DATA_CONFIG_VERSION,
+        "datasets"=>[d.conf for (n,d) in proj.datasets],
+        "drivers"=>proj.drivers
+    )
+    mktemp(dirname(path)) do tmppath, tmpio
+        TOML.print(tmpio, conf)
+        close(tmpio)
+        mv(tmppath, path, force=true)
+    end
+end
+
+function config(name::AbstractString; kws...)
+    config(PROJECT, name; kws...)
+end
