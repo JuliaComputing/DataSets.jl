@@ -7,5 +7,5 @@ uuid="314996ef-12be-40d0-912c-9755af354fdb"
 
     [datasets.storage]
     driver="FileSystem"
-    type="Blob"
+    type="File"
     path="@__DIR__/data/file.txt"

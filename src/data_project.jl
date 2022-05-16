@@ -168,8 +168,8 @@ function Base.show(io::IO, ::MIME"text/plain", project::AbstractDataProject)
     for (i, (name, data)) in enumerate(sorted)
         pad = maxwidth - textwidth(name)
         storagetype = get(data.storage, "type", nothing)
-        icon = storagetype == "Blob"     ? '📄' :
-               storagetype == "BlobTree" ? '📁' :
+        icon = storagetype in ("File", "Blob")     ? '📄' :
+               storagetype in ("FileTree", "BlobTree") ? '📁' :
                '❓'
         print(io, "  ", icon, ' ', name, ' '^pad, " => ", data.uuid)
         if i < length(sorted)

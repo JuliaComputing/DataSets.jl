@@ -13,8 +13,6 @@ test_project_names = ["a_text_file",
                       "embedded_blob",
                       "embedded_tree",
                       "gzipped_table",
-                      "old_backend_blob",
-                      "old_backend_tree",
                       "some_namespace/a_text_file"]
 
 @testset "TomlFileDataProject" begin
@@ -56,7 +54,7 @@ end
 
             [datasets.storage]
             driver="FileSystem"
-            type="Blob"
+            type="File"
             path="@__DIR__/data/file.txt"
         """)
         flush(io)
@@ -75,7 +73,7 @@ end
 
             [datasets.storage]
             driver="FileSystem"
-            type="Blob"
+            type="File"
             path="@__DIR__/data/file2.txt"
         """)
         flush(io)

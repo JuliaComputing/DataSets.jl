@@ -60,7 +60,7 @@ description = "A text file containing the standard greeting"
 
 [storage]
 driver = "FileSystem"
-type = "Blob"
+type = "File"
 path = ".../DataSets/docs/src/data/file.txt"
 ```
 
@@ -80,14 +80,14 @@ description = "A text file containing the standard greeting"
 
 [storage]
 driver = "FileSystem"
-type = "Blob"
+type = "File"
 path = ".../DataSets/docs/src/data/file.txt"
 ```
 
 ## Loading Data
 
 You can call `open()` on a DataSet to inspect the data inside.  `open()` will
-return the [`Blob`](@ref) and [`BlobTree`](@ref) types for local files and
+return the [`File`](@ref) and [`FileTree`](@ref) types for local files and
 directories on disk. For example,
 
 ```jldoctest
@@ -100,7 +100,7 @@ julia> open(dataset("a_tree_example"))
  📄 2.csv
 ```
 
-Use the form `open(T, dataset)` to read the data as a specific type. `Blob`
+Use the form `open(T, dataset)` to read the data as a specific type. `File`
 data can be opened as `String`, `IO`, or `Vector{UInt8}`, depending on your
 needs:
 
@@ -133,13 +133,13 @@ content = "Hello world!\n"
 ```
 
 Let's look at some tree-like data which is represented on local disk as a
-folder or directory. Tree data is opened in Julia as the [`BlobTree`](@ref)
-type and can be indexed with path components to get at the file [`Blob`](@ref)s
+folder or directory. Tree data is opened in Julia as the [`FileTree`](@ref)
+type and can be indexed with path components to get at the file [`File`](@ref)s
 inside. In turn, we can `open()` one of the file blobs and look at the data
 contained within.
 
 ```jldoctest
-julia> tree = open(BlobTree, dataset("a_tree_example"))
+julia> tree = open(FileTree, dataset("a_tree_example"))
 📂 Tree  @ .../DataSets/docs/src/data/csvset
  📄 1.csv
  📄 2.csv
@@ -160,14 +160,14 @@ Rather than manually using the `open()` functions as shown above, the
 into your program.
 
 For example, here we define an entry point called `main` which takes
-* DataSet type `Blob`, presenting it as a `String` within the program
-* DataSet type `BlobTree`, presenting it as a `BlobTree` within the program
+* DataSet type `File`, presenting it as a `String` within the program
+* DataSet type `FileTree`, presenting it as a `FileTree` within the program
 
 The `@datarun` macro allows you to call such program entry points, extracting
 named data sets from a given project.
 
 ```jldoctest
-julia> @datafunc function main(x::Blob=>String, t::BlobTree=>BlobTree)
+julia> @datafunc function main(x::File=>String, t::FileTree=>FileTree)
            @show x
            open(String, t["1.csv"]) do csv_data
                @show csv_data

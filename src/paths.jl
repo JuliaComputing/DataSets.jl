@@ -11,7 +11,7 @@ A `RelPath` is a *key* into a hierarchical string-indexed tree datastructure,
 with each component indexing one level of the hierarchy.
 
 As a key, the resource referred to by a path may or may not exist.
-Conversely, `BlobTree` and `Blob` refer to the actual data stored with a given
+Conversely, `FileTree` and `File` refer to the actual data stored with a given
 key.
 """
 struct RelPath <: AbstractPath

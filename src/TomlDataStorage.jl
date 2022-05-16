@@ -6,19 +6,19 @@ Useful for small amounts of self-contained data.
 
 ## Metadata spec
 
-For Blob:
+For File:
 ```
     [datasets.storage]
     driver="TomlDataStorage"
-    type="Blob"
+    type="File"
     data=\$(base64encode(data))
 ```
 
-For BlobTree:
+For FileTree:
 ```
     [datasets.storage]
     driver="TomlDataStorage"
-    type="BlobTree"
+    type="FileTree"
 
         [datasets.storage.data.\$(dirname1)]
         "\$(filename1)" = \$(base64encode(data1))
@@ -63,7 +63,7 @@ function Base.readdir(storage::TomlDataStorage, path::RelPath)
 end
 
 #--------------------------------------------------
-# Storage data interface for Blob
+# Storage data interface for File
 
 function Base.open(func::Function, as_type::Type{IO},
                    storage::TomlDataStorage, path; kws...)
@@ -108,16 +108,16 @@ end
 function connect_toml_data_storage(f, config, dataset)
     type = config["type"]
     data = get(config, "data", nothing)
-    if type == "Blob"
+    if type in ("File", "Blob")
         if !(data isa AbstractString)
             error("TOML data storage requires string data in the \"storage.data\" key")
         end
-        f(Blob(TomlDataStorage(dataset, data)))
-    elseif type == "BlobTree"
+        f(File(TomlDataStorage(dataset, data)))
+    elseif type in ("FileTree", "BlobTree")
         if !(data isa AbstractDict)
             error("TOML data storage requires a dictionary in the \"storage.data\" key")
         end
-        f(BlobTree(TomlDataStorage(dataset, data)))
+        f(FileTree(TomlDataStorage(dataset, data)))
     else
         throw(ArgumentError("DataSet type $type not supported for data embedded in Data.toml"))
     end

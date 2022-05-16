@@ -7,7 +7,7 @@ using ResourceContexts
 using Base: PkgId
 
 export DataSet, dataset, @datafunc, @datarun
-export Blob, BlobTree, newfile, newdir
+export File, FileTree, newfile, newdir
 
 """
 The current DataSets version number
@@ -195,7 +195,7 @@ end
 To open a directory as a browsable tree object,
 
 ```julia
-open(BlobTree, dataset("a_tree_example"))
+open(FileTree, dataset("a_tree_example"))
 ```
 """
 dataset(name) = dataset(PROJECT, name)
@@ -234,5 +234,8 @@ include("TomlDataStorage.jl")
 
 # Application-level stuff
 include("repl.jl")
+
+Base.@deprecate_binding Blob File
+Base.@deprecate_binding BlobTree FileTree
 
 end

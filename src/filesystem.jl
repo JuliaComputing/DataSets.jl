@@ -14,8 +14,8 @@ end
 
 sys_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
 sys_abspath(path::AbsPath) = sys_abspath(path.root, path.path)
-sys_abspath(tree::BlobTree) = sys_abspath(tree.root, tree.path)
-sys_abspath(file::Blob) = sys_abspath(file.root, file.path)
+sys_abspath(tree::FileTree) = sys_abspath(tree.root, tree.path)
+sys_abspath(file::File) = sys_abspath(file.root, file.path)
 
 #--------------------------------------------------
 # Storage data interface for trees
@@ -44,7 +44,7 @@ function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)
         error("Cannot make directory in read-only tree")
     end
     mkdir(sys_abspath(root, path), args...)
-    return BlobTree(root, path)
+    return FileTree(root, path)
 end
 
 function Base.rm(root::AbstractFileSystemRoot, path::RelPath; kws...)
@@ -59,7 +59,7 @@ function Base.delete!(root::AbstractFileSystemRoot, path::RelPath)
 end
 
 #--------------------------------------------------
-# Storage data interface for Blob
+# Storage data interface for File
 
 # TODO: Make this the generic implementation for AbstractDataStorage
 function Base.open(f::Function, as_type::Type{IO},
@@ -85,19 +85,19 @@ Base.read(root::AbstractFileSystemRoot, path::RelPath) =
 
 ## Metadata spec
 
-For Blob:
+For File:
 ```
     [datasets.storage]
     driver="FileSystem"
-    type="Blob"
+    type="File"
     path=\$(path_to_file)
 ```
 
-For BlobTree:
+For FileTree:
 ```
     [datasets.storage]
     driver="FileSystem"
-    type="BlobTree"
+    type="FileTree"
     path=\$(path_to_directory)
 ```
 """
@@ -151,7 +151,7 @@ sys_abspath(root::TempFilesystemRoot) = root.path
 function newdir()
     # cleanup=false: we manage our own cleanup via the finalizer
     path = mktempdir(cleanup=false)
-    return BlobTree(TempFilesystemRoot(path))
+    return FileTree(TempFilesystemRoot(path))
 end
 
 function newdir(root::AbstractFileSystemRoot, path::RelPath; overwrite=false)
@@ -175,7 +175,7 @@ function newfile(func=nothing)
             close(io)
         end
     end
-    return Blob(TempFilesystemRoot(path))
+    return File(TempFilesystemRoot(path))
 end
 
 function newfile(f::Function, root::AbstractFileSystemRoot, path::RelPath; kws...)
@@ -193,26 +193,26 @@ end
 function newdir(ctx::AbstractFileSystemRoot)
     Base.depwarn("""
         `newdir(ctx::AbstractFileSystemRoot)` is deprecated. Use the in-place
-        version `newdir(::BlobTree, path)` instead.
+        version `newdir(::FileTree, path)` instead.
         """, :newdir)
     path = mktempdir(sys_abspath(ctx), cleanup=false)
-    return BlobTree(TempFilesystemRoot(path))
+    return FileTree(TempFilesystemRoot(path))
 end
 
 function newfile(ctx::AbstractFileSystemRoot)
     Base.depwarn("""
         `newfile(ctx::AbstractFileSystemRoot)` is deprecated. Use the in-place
-        version `newfile(::BlobTree, path)` instead.
+        version `newfile(::FileTree, path)` instead.
         """, :newfile)
     path, io = mktemp(sys_abspath(ctx), cleanup=false)
     close(io)
-    return Blob(TempFilesystemRoot(path))
+    return File(TempFilesystemRoot(path))
 end
 
 function newfile(f::Function, root::FileSystemRoot)
     Base.depwarn("""
         `newfile(f::Function, ctx::AbstractFileSystemRoot)` is deprecated.
-        Use newfile() or the in-place version `newfile(::BlobTree, path)` instead.
+        Use newfile() or the in-place version `newfile(::FileTree, path)` instead.
         """, :newfile)
     path, io = mktemp(sys_abspath(root), cleanup=false)
     try
@@ -223,7 +223,7 @@ function newfile(f::Function, root::FileSystemRoot)
     finally
         close(io)
     end
-    return Blob(TempFilesystemRoot(path))
+    return File(TempFilesystemRoot(path))
 end
 
 # Move srcpath to destpath, making all attempts to preserve the original
@@ -270,8 +270,8 @@ function mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
     end
 end
 
-function Base.setindex!(tree::BlobTree{<:AbstractFileSystemRoot},
-                        tmpdata::Union{Blob{TempFilesystemRoot},BlobTree{TempFilesystemRoot}},
+function Base.setindex!(tree::FileTree{<:AbstractFileSystemRoot},
+                        tmpdata::Union{File{TempFilesystemRoot},FileTree{TempFilesystemRoot}},
                         name::AbstractString)
     if !iswriteable(tree.root)
         error("Attempt to move to a read-only tree $tree")
@@ -308,12 +308,12 @@ end
 function connect_filesystem(f, config, dataset)
     path = config["path"]
     type = config["type"]
-    if type == "Blob"
+    if type in ("File", "Blob")
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
-        storage = Blob(FileSystemRoot(path))
-    elseif type == "BlobTree"
+        storage = File(FileSystemRoot(path))
+    elseif type in ("FileTree", "BlobTree")
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
-        storage = BlobTree(FileSystemRoot(path))
+        storage = FileTree(FileSystemRoot(path))
         path = dataspec_fragment_as_path(dataset)
         if !isnothing(path)
             storage = storage[path]

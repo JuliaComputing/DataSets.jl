@@ -66,7 +66,7 @@ DataSets.add_storage_driver("OldBackendAPI"=>connect_old_backend)
 
 #-------------------------------------------------------------------------------
 @testset "OldBackendAPI" begin
-    proj = DataSets.load_project("Data.toml")
+    proj = DataSets.load_project(joinpath(@__DIR__, "DataCompat.toml"))
 
     @test open(IO, dataset(proj, "old_backend_blob")) do io
            read(io, String)
@@ -77,8 +77,22 @@ DataSets.add_storage_driver("OldBackendAPI"=>connect_old_backend)
     @test read(open(dataset(proj, "old_backend_blob"))) == UInt8['x']
 
     @test readdir(open(dataset(proj, "old_backend_tree"))) == ["a.txt", "b.txt"]
-    @test open(dataset(proj, "old_backend_tree"))[path"a.txt"] isa Blob
+    @test open(dataset(proj, "old_backend_tree"))[path"a.txt"] isa File
     @test read(open(dataset(proj, "old_backend_tree"))[path"a.txt"], String) == "a"
     @test read(open(dataset(proj, "old_backend_tree"))[path"b.txt"], String) == "b"
 end
 
+@testset "Compat for renaming Blob->File, BlobTree->FileTree" begin
+    proj = DataSets.load_project(joinpath(@__DIR__, "DataCompat.toml"))
+
+    text_data = dataset(proj, "a_text_file")
+    @test open(text_data) isa Blob
+    @test read(open(text_data), String) == "Hello world!\n"
+
+    tree_data = dataset(proj, "a_tree_example")
+    @context begin
+        @test @!(open(tree_data)) isa BlobTree
+        tree = @! open(tree_data)
+        @test readdir(tree) == ["1.csv", "2.csv"]
+    end
+end

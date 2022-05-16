@@ -214,8 +214,8 @@ inferred as a blob or tree based on whether the local path is a file or
 directory.
 """
 function from_path(path::AbstractString)
-    dtype = isfile(path) ? "Blob"     :
-            isdir(path)  ? "BlobTree" :
+    dtype = isfile(path) ? "File"     :
+            isdir(path)  ? "FileTree" :
             nothing
 
     if isnothing(dtype)
