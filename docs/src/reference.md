@@ -51,7 +51,7 @@ DataSets.TomlFileDataProject
 DataSets provides some builtin data models [`File`](@ref) and
 [`FileTree`](@ref) for accessin file- and directory-like data respectively. For
 modifying these, the functions [`newfile`](@ref) and [`newdir`](@ref) can be
-used, together with `setindex!` for `FileTree`.
+used.
 
 ```@docs
 File
