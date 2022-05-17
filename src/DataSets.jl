@@ -222,7 +222,7 @@ end
 include("entrypoint.jl")
 
 # Builtin Data models
-include("BlobTree.jl")
+include("FileTree.jl")
 
 # Builtin backends
 include("filesystem.jl")
