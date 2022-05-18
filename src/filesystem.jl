@@ -30,6 +30,7 @@ sys_abspath(file::File) = sys_abspath(file.root, file.path)
 Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(sys_abspath(root, path))
 Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(sys_abspath(root, path))
 Base.ispath(root::AbstractFileSystemRoot, path::RelPath) = ispath(sys_abspath(root, path))
+Base.filesize(root::AbstractFileSystemRoot, path::RelPath) = filesize(sys_abspath(root, path))
 
 Base.summary(io::IO, root::AbstractFileSystemRoot) = print(io, sys_abspath(root))
 
@@ -148,6 +149,13 @@ end
 iswriteable(root::TempFilesystemRoot) = true
 sys_abspath(root::TempFilesystemRoot) = root.path
 
+"""
+    newdir()
+
+Create a new `FileTree` on the local temporary directory. If not moved to a
+permanent location (for example, with `some_tree["name"] = newdir()`) the
+temporary tree will be cleaned up during garbage collection.
+"""
 function newdir()
     # cleanup=false: we manage our own cleanup via the finalizer
     path = mktempdir(cleanup=false)

@@ -77,31 +77,6 @@ end
 end
 
 #-------------------------------------------------------------------------------
-@testset "open() for File and FileTree" begin
-    blob = File(FileSystemRoot("data/file.txt"))
-    @test        open(identity, String, blob)         == "Hello world!\n"
-    @test String(open(identity, Vector{UInt8}, blob)) == "Hello world!\n"
-    @test open(io->read(io,String), IO, blob)         == "Hello world!\n"
-    @test open(identity, File, blob) === blob
-    # Unscoped forms
-    @test open(String, blob)                == "Hello world!\n"
-    @test String(open(Vector{UInt8}, blob)) == "Hello world!\n"
-    @test read(open(IO, blob), String)      == "Hello world!\n"
-
-    tree = FileTree(FileSystemRoot("data"))
-    @test open(identity, FileTree, tree) === tree
-
-    # Context-based forms
-    @context begin
-        @test @!(open(String, blob))               == "Hello world!\n"
-        @test String(@! open(Vector{UInt8}, blob)) == "Hello world!\n"
-        @test read(@!(open(IO, blob)), String)     == "Hello world!\n"
-        @test @!(open(File, blob))                 === blob
-        @test @!(open(FileTree, tree))             === tree
-    end
-end
-
-#-------------------------------------------------------------------------------
 @testset "Data set names" begin
     # Valid names
     @test DataSets.is_valid_dataset_name("a_b")
@@ -151,28 +126,7 @@ end
     @test dataset(proj, "a_text_file?x=1&yy=2#frag")["dataspec"]["fragment"] == "frag"
 end
 
-#-------------------------------------------------------------------------------
-# Trees
-@testset "Temporary trees" begin
-    function write_dir(j)
-        d = newdir()
-        for i=1:2
-            d["hi_$i.txt"] = newfile() do io
-                println(io, "hi $j $i")
-            end
-        end
-        return d
-    end
-
-    temptree = newdir()
-    for j=1:3
-        temptree["d$j"] = write_dir(j)
-    end
-    @test open(io->read(io,String), IO, temptree["d1"]["hi_2.txt"]) == "hi 1 2\n"
-    @test open(io->read(io,String), IO, temptree["d3"]["hi_1.txt"]) == "hi 3 1\n"
-    @test isfile(DataSets.sys_abspath(temptree["d1"]["hi_2.txt"]))
-end
-
+include("FileTree.jl")
 include("projects.jl")
 include("entrypoint.jl")
 include("repl.jl")

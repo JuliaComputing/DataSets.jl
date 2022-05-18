@@ -18,6 +18,7 @@ struct RelPath <: AbstractPath
     components::Vector{String}
 end
 
+RelPath(path::RelPath) = path
 RelPath(str::AbstractString) = RelPath(split(str, '/'))
 RelPath(components::AbstractVector=String[]) = RelPath(convert(Vector{String}, components))
 

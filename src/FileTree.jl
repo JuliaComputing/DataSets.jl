@@ -89,13 +89,16 @@ function Base.copy!(dst::AbstractFileTree, src::AbstractFileTree)
             copy!(newdir(dst, xname), x)
         else
             open(x) do io_src
-                newfile(dst, xname, write=true) do io_dst
+                newfile(dst, xname, overwrite=true) do io_dst
                     write(io_dst, io_src)
                 end
             end
         end
     end
+    return dst
 end
+
+Base.copy(src::AbstractFileTree) = copy!(newdir(), src)
 
 #-------------------------------------------------------------------------------
 """
@@ -122,6 +125,7 @@ Base.abspath(file::File) = AbsPath(file.root, file.path)
 Base.isdir(file::File) = false
 Base.isfile(file::File) = true
 Base.ispath(file::File) = true
+Base.filesize(file::File) = filesize(file.root, file.path)
 
 function Base.show(io::IO, ::MIME"text/plain", file::File)
     print(io, "📄 ", file.path, " @ ", summary(file.root))
@@ -197,9 +201,9 @@ end
 end
 
 # Unscoped form of open for File
-function Base.open(::Type{T}, blob::File; kws...) where {T}
+function Base.open(::Type{T}, file::File; kws...) where {T}
     @context begin
-        result = @! open(T, blob; kws...)
+        result = @! open(T, file; kws...)
         @! ResourceContexts.detach_context_cleanup(result)
     end
 end
@@ -247,10 +251,12 @@ directory.
 
 * Property access
   - `isdir()`, `isfile()` - determine whether a child of tree is a directory or file.
+  - `filesize()` — size of `File` elements in a tree
 
 # Example
 
-You can create a new temporary FileTree via the `newdir()` function:
+Create a new temporary FileTree via the `newdir()` function and fill it with
+files via `newfile()`:
 
 ```
 julia> dir = newdir()
@@ -272,8 +278,7 @@ julia> dir = newdir()
  📄 b-3.txt
 ```
 
-You can also get access to a `FileTree` by using `DataSets.from_path()` with a
-local directory name. For example:
+Create a `FileTree` from a local directory with `DataSets.from_path()`:
 
 ```
 julia> using Pkg
@@ -400,19 +405,12 @@ end
 """
     newdir(tree, path; overwrite=false)
 
-Create a new directory at tree[path] and return it. If `overwrite=true`, remove
-any existing directory before creating the new one.
-
-    newdir()
-
-Create a new temporary `FileTree` which can have files assigned into it and may
-be assigned to a permanent location in a persistent `FileTree`. If not assigned
-to a permanent location, the temporary tree is cleaned up during garbage
-collection.
+Create a new FileTree ("directory") at tree[path] and return it. If
+`overwrite=true`, remove any existing tree before creating the new one.
 """
 function newdir(tree::FileTree, path::RelPath; overwrite=false)
     _check_new_item(tree, path, overwrite)
-    p = joinpath(tree.path, RelPath(path))
+    p = joinpath(tree.path, path)
     newdir(tree.root, p; overwrite=overwrite)
     return FileTree(tree.root, p)
 end
@@ -475,7 +473,7 @@ end
 # Path manipulation
 
 # TODO: Maybe deprecate these? Under the "datastructure-like" model, it seems wrong
-# for a blob to know its name in the parent data structure.
+# for a file to know its name in the parent data structure.
 Base.basename(tree::FileTree) = basename(tree.path)
 Base.abspath(tree::FileTree) = AbsPath(tree.root, tree.path)
 
