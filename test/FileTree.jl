@@ -1,62 +1,4 @@
-
-@testset "File API" begin
-    file = File(FileSystemRoot("data/file.txt"))
-
-    @testset "metadata" begin
-        @test filesize(file) == 13
-        @test isfile(file)
-        @test !isdir(file)
-        @test ispath(file)
-    end
-
-    @testset "open()" begin
-        # Do-block based forms
-        @test        open(identity, String, file)         == "Hello world!\n"
-        @test String(open(identity, Vector{UInt8}, file)) == "Hello world!\n"
-        @test open(io->read(io,String), IO, file)         == "Hello world!\n"
-        @test open(identity, File, file) === file
-
-        # Unscoped forms
-        @test open(String, file)                == "Hello world!\n"
-        @test String(open(Vector{UInt8}, file)) == "Hello world!\n"
-        @test read(open(IO, file), String)      == "Hello world!\n"
-
-        # Context-based forms
-        @context begin
-            @test @!(open(String, file))               == "Hello world!\n"
-            @test String(@! open(Vector{UInt8}, file)) == "Hello world!\n"
-            @test read(@!(open(IO, file)), String)     == "Hello world!\n"
-            @test @!(open(File, file))                 === file
-        end
-    end
-end
-
 @testset "FileTree API" begin
-    tree = FileTree(FileSystemRoot("data"))
-
-    @testset "metadata" begin
-        @test !isfile(tree)
-        @test isdir(tree)
-        @test ispath(tree)
-    end
-
-    @test tree["csvset"] isa FileTree
-    @test tree["csvset/1.csv"] isa File
-    @test tree["csvset"]["2.csv"] isa File
-
-    @testset "open()" begin
-        @test open(identity, FileTree, tree) === tree
-
-        # Context-based forms
-        @context begin
-            @test @!(open(FileTree, tree)) === tree
-        end
-    end
-
-    # TODO: delete!
-end
-
-@testset "newfile() and newdir()" begin
     @testset "isolated newfile" begin
         @test newfile() isa File
         @test read(newfile()) == []
@@ -81,6 +23,22 @@ end
     @test read(tree["d1/hi_1_2.txt"], String) == "hi 1/2\n"
     @test read(tree["d2/hi_2_1.txt"], String) == "hi 2/1\n"
     @test read(tree["d2/hi_2_2.txt"], String) == "hi 2/2\n"
+
+    @testset "metadata" begin
+        f = tree["d1/hi_1_1.txt"]
+        @test filesize(f) == 7
+        @test isfile(f)
+        @test !isdir(f)
+        @test ispath(f)
+
+        d = tree["d1"]
+        @test !isfile(d)
+        @test isdir(d)
+        @test ispath(d)
+
+        @test haskey(tree, "d1")
+        @test !haskey(tree, "x")
+    end
 
     @testset "Iteration" begin
         # keys
@@ -140,6 +98,88 @@ end
         @test newfile(tree3, "a/b/c") isa File
         @test tree3["a"]["b"]["c"] isa File
     end
+
+    @testset "setindex!" begin
+        tree = newdir()
+        @test keys(tree) == []
+        tree["a"] = newfile()
+        @test tree["a"] isa File
+        tree["b"] = newdir()
+        @test tree["b"] isa FileTree
+        tree["c/d"] = newfile()
+        @test tree["c"] isa FileTree
+        @test tree["c/d"] isa File
+        @test keys(tree) == ["a","b","c"]
+        d = newdir()
+        newfile(io->print(io, "E"), d, "e")
+        newfile(io->print(io, "F"), d, "f")
+        tree["x"] = d
+        @test read(tree["x/e"], String) == "E"
+        @test read(tree["x/f"], String) == "F"
+    end
+
+    @testset "delete!" begin
+        tree = newdir()
+        newfile(tree, "a/b/c")
+        newfile(tree, "a/b/d")
+        @test keys(tree) == ["a"]
+        delete!(tree, "a")
+        @test keys(tree) == []
+        newfile(tree, "x")
+        @test keys(tree) == ["x"]
+        delete!(tree, "x")
+        @test keys(tree) == []
+    end
+
+    @testset "open(::File)" begin
+        file = newfile(io->print(io, "xx"))
+
+        # Do-block based forms
+        @test        open(identity, String, file)         == "xx"
+        @test String(open(identity, Vector{UInt8}, file)) == "xx"
+        @test open(io->read(io,String), IO, file)         == "xx"
+        @test open(identity, File, file) === file
+
+        # Unscoped forms
+        @test open(String, file)                == "xx"
+        @test String(open(Vector{UInt8}, file)) == "xx"
+        @test read(open(IO, file), String)      == "xx"
+
+        # Context-based forms
+        @context begin
+            @test @!(open(String, file))               == "xx"
+            @test String(@! open(Vector{UInt8}, file)) == "xx"
+            @test read(@!(open(IO, file)), String)     == "xx"
+            @test @!(open(File, file))                 === file
+        end
+    end
+
+    @testset "open(::FileTree)" begin
+        tree = FileTree(FileSystemRoot("data"))
+
+        @test open(identity, FileTree, tree) === tree
+
+        # Context-based forms
+        @context begin
+            @test @!(open(FileTree, tree)) === tree
+        end
+    end
+end
+
+@testset "newfile / newdir cleanup" begin
+    f = newfile()
+    global sys_file_path = f.root.path
+    GC.@preserve f  @test isfile(sys_file_path)
+    d = newdir()
+    global sys_dir_path = d.root.path
+    GC.@preserve d @test isdir(sys_dir_path)
+end
+# Having the following as a separate top level statement ensures that `f` and
+# `d` aren't accidentally still rooted so the the GC can clean them up.
+@testset "newfile / newdir cleanup step 2" begin
+    GC.gc()
+    @test !ispath(sys_file_path)
+    @test !ispath(sys_dir_path)
 end
 
 #=
