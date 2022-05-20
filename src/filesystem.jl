@@ -159,6 +159,8 @@ function newfile(func=nothing)
         finally
             close(io)
         end
+    else
+        close(io)
     end
     return File(_temp_root(path))
 end
