@@ -225,27 +225,30 @@ Base.open(f::Function, path::AbsPath; kws...) = open(f, IO, path.root, path.path
 
 #-------------------------------------------------------------------------------
 """
+    newdir()
     FileTree(root)
 
-`FileTree` is a "directory tree" like hierarchy which may have `File`s and
-`FileTree`s as children.
+Create a `FileTree` which is a "directory tree" like hierarchy which may have
+`File`s and `FileTree`s as children.  `newdir()` creates the tree in a
+temporary directory on the local filesystem. Alternative `root`s may be
+supplied which store the data elsewhere.
 
-The tree implements the `AbstracTrees.children()` interface and may be indexed
-with paths to traverse the hierarchy down to the leaves ("files") which are of
-type `File`. Individual leaves may be `open()`ed as various Julia types.
+The tree implements the `AbstractTrees.children()` interface and may be indexed
+with `/`-separated paths to traverse the hierarchy down to the leaves which are
+of type `File`. Individual leaves may be `open()`ed as various Julia types.
 
 # Operations on FileTree
 
-FileTree has a largely dictionary-like interface:
+`FileTree` has a largely dictionary-like interface:
 
 * List keys (ie, file and directory names): `keys(tree)`
-* List keys and values:  `pairs(tree)`
+* List keys,value pairs:  `pairs(tree)`
 * Query keys:            `haskey(tree)`
-* Traverse the tree:     `tree["path"]`
+* Traverse the tree:     `tree["path"]`, `tree["multi/component/path"]`
 * Add new content:       `newdir(tree, "path")`, `newfile(tree, "path")`
 * Delete content:        `delete!(tree, "path")`
 
-Unlike Dict, iteration of FileTree iterates values (not key value pairs). This
+Iteration of FileTree iterates values (not key value pairs). This
 has some benefits - for example, broadcasting processing across files in a
 directory.
 
@@ -490,6 +493,9 @@ end
 # Deprecated
 function Base.rm(tree::FileTree; kws...)
     _check_writeable(tree)
+    Base.depwarn("""
+        `rm(::FileTree)` is deprecated.  Use `delete!(tree, path)` instead.
+        """, :rm)
     rm(tree.root, tree.path; kws...)
 end
 
