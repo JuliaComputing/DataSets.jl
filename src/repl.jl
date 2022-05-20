@@ -64,7 +64,7 @@ function hexdump(out_stream, buf; groups_per_line=8, group_size=2, max_lines=typ
     end
 end
 
-function _show_dataset(out_stream::IO, blob::Blob)
+function _show_dataset(out_stream::IO, blob::File)
     @context begin
         io = @! open(IO, blob)
         N = 1024
@@ -97,7 +97,7 @@ function _show_dataset(out_stream::IO, blob::Blob)
     end
 end
 
-function _show_dataset(out_stream::IO, tree::BlobTree)
+function _show_dataset(out_stream::IO, tree::FileTree)
     show(out_stream, MIME("text/plain"), tree)
 end
 

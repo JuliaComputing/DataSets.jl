@@ -48,14 +48,14 @@ DataSets.TomlFileDataProject
 
 ## Data Models for files and directories
 
-DataSets provides some builtin data models [`Blob`](@ref) and
-[`BlobTree`](@ref) for accessin file- and directory-like data respectively. For
+DataSets provides some builtin data models [`File`](@ref) and
+[`FileTree`](@ref) for accessin file- and directory-like data respectively. For
 modifying these, the functions [`newfile`](@ref) and [`newdir`](@ref) can be
-used, together with `setindex!` for `BlobTree`.
+used.
 
 ```@docs
-Blob
-BlobTree
+File
+FileTree
 newfile
 newdir
 ```

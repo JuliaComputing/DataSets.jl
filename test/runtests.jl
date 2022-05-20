@@ -28,7 +28,7 @@ end
 
             "storage"=>Dict(
                 "driver"=>"FileSystem",
-                "type"=>"Blob",
+                "type"=>"File",
                 "path"=>joinpath(@__DIR__, "data", "file.txt")
                )
            )]
@@ -44,22 +44,22 @@ end
     proj = DataSets.load_project("Data.toml")
 
     text_data = dataset(proj, "a_text_file")
-    @test open(text_data) isa Blob
+    @test open(text_data) isa File
     @test read(open(text_data), String) == "Hello world!\n"
     @context begin
         @test read(@!(open(text_data)), String) == "Hello world!\n"
     end
 
     tree_data = dataset(proj, "a_tree_example")
-    @test open(tree_data) isa BlobTree
+    @test open(tree_data) isa FileTree
     @context begin
-        @test @!(open(tree_data)) isa BlobTree
+        @test @!(open(tree_data)) isa FileTree
         tree = @! open(tree_data)
         @test readdir(tree) == ["1.csv", "2.csv"]
     end
 
     blob_in_tree_data = dataset(proj, "a_tree_example#1.csv")
-    @test open(blob_in_tree_data) isa Blob
+    @test open(blob_in_tree_data) isa File
     @context begin
         @test @!(open(String, blob_in_tree_data)) == """Name,Age\n"Aaron",23\n"Harry",42\n"""
     end
@@ -72,33 +72,8 @@ end
 
     dir_dataset = DataSets.from_path(joinpath(@__DIR__, "data", "csvset"))
 
-    @test open(dir_dataset) isa BlobTree
+    @test open(dir_dataset) isa FileTree
     @test keys(open(dir_dataset)) == ["1.csv", "2.csv"]
-end
-
-#-------------------------------------------------------------------------------
-@testset "open() for Blob and BlobTree" begin
-    blob = Blob(FileSystemRoot("data/file.txt"))
-    @test        open(identity, String, blob)         == "Hello world!\n"
-    @test String(open(identity, Vector{UInt8}, blob)) == "Hello world!\n"
-    @test open(io->read(io,String), IO, blob)         == "Hello world!\n"
-    @test open(identity, Blob, blob) === blob
-    # Unscoped forms
-    @test open(String, blob)                == "Hello world!\n"
-    @test String(open(Vector{UInt8}, blob)) == "Hello world!\n"
-    @test read(open(IO, blob), String)      == "Hello world!\n"
-
-    tree = BlobTree(FileSystemRoot("data"))
-    @test open(identity, BlobTree, tree) === tree
-
-    # Context-based forms
-    @context begin
-        @test @!(open(String, blob))               == "Hello world!\n"
-        @test String(@! open(Vector{UInt8}, blob)) == "Hello world!\n"
-        @test read(@!(open(IO, blob)), String)     == "Hello world!\n"
-        @test @!(open(Blob, blob))                 === blob
-        @test @!(open(BlobTree, tree))             === tree
-    end
 end
 
 #-------------------------------------------------------------------------------
@@ -151,28 +126,7 @@ end
     @test dataset(proj, "a_text_file?x=1&yy=2#frag")["dataspec"]["fragment"] == "frag"
 end
 
-#-------------------------------------------------------------------------------
-# Trees
-@testset "Temporary trees" begin
-    function write_dir(j)
-        d = newdir()
-        for i=1:2
-            d["hi_$i.txt"] = newfile() do io
-                println(io, "hi $j $i")
-            end
-        end
-        return d
-    end
-
-    temptree = newdir()
-    for j=1:3
-        temptree["d$j"] = write_dir(j)
-    end
-    @test open(io->read(io,String), IO, temptree["d1"]["hi_2.txt"]) == "hi 1 2\n"
-    @test open(io->read(io,String), IO, temptree["d3"]["hi_1.txt"]) == "hi 3 1\n"
-    @test isfile(DataSets.sys_abspath(temptree["d1"]["hi_2.txt"]))
-end
-
+include("FileTree.jl")
 include("projects.jl")
 include("entrypoint.jl")
 include("repl.jl")

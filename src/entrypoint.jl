@@ -93,8 +93,8 @@ Get a string representation of the "DataSet type", which represents the type of
 the data *outside* Julia.
 
 A given DataSet type may be mapped into many different Julia types. For example
-consider the "Blob" type which is an array of bytes (commonly held in a file).
-When loaded into Julia, this may be represented as a
+consider the "File" type which is an array of bytes (commonly held in a file on
+disk). When loaded into Julia, this may be represented as a
     * IO             — via open())
     * String         — via open() |> read(_,String)
     * Vector{UInt8}  — via mmap)

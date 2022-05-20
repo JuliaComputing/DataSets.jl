@@ -1,14 +1,14 @@
 # Data entry point functions
 read_data = nothing
 
-@datafunc function main1(x::Blob=>String, t::BlobTree=>BlobTree)
+@datafunc function main1(x::File=>String, t::FileTree=>FileTree)
     csv_data = open(IO, t["1.csv"]) do io
         read(io,String)
     end
     global read_data = (x_string=x, csv_data=csv_data)
 end
 
-@datafunc function main1(x::Blob=>IO)
+@datafunc function main1(x::File=>IO)
     x_data = read(x, String)
     global read_data = (x_data=x_data,)
 end

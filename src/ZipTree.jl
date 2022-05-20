@@ -27,18 +27,18 @@ end
 
 
 #-------------------------------------------------------------------------------
-# FIXME: Factor back together with BlobTree.jl !!
+# FIXME: Factor back together with FileTree.jl !!
 
-struct ZippedBlobTree <: AbstractBlobTree
+struct ZippedFileTree <: AbstractFileTree
     root::ZipTreeRoot
     path::RelPath
 end
 
-ZippedBlobTree(root::ZipTreeRoot) = ZippedBlobTree(root, RelPath())
+ZippedFileTree(root::ZipTreeRoot) = ZippedFileTree(root, RelPath())
 
-Base.basename(tree::ZippedBlobTree) = basename(tree.path)
+Base.basename(tree::ZippedFileTree) = basename(tree.path)
 
-function Base.getindex(tree::ZippedBlobTree, path::RelPath)
+function Base.getindex(tree::ZippedFileTree, path::RelPath)
     newpath = joinpath(tree.path, path)
     i = findfirst(tree.root.file_info) do info
         info.path == newpath
@@ -46,17 +46,17 @@ function Base.getindex(tree::ZippedBlobTree, path::RelPath)
     if i == nothing
         error("Path $newpath doesn't exist in $tree")
     elseif tree.root.file_info[i].is_dir
-        ZippedBlobTree(tree.root, newpath)
+        ZippedFileTree(tree.root, newpath)
     else
-        Blob(tree.root, newpath)
+        File(tree.root, newpath)
     end
 end
 
-function Base.getindex(tree::ZippedBlobTree, name::AbstractString)
+function Base.getindex(tree::ZippedFileTree, name::AbstractString)
     getindex(tree, joinpath(RelPath(), name))
 end
 
-function _tree_children(tree::ZippedBlobTree)
+function _tree_children(tree::ZippedFileTree)
     children = String[]
     for (i,info) in enumerate(tree.root.file_info)
         if dirname(info.path) == tree.path
@@ -66,8 +66,8 @@ function _tree_children(tree::ZippedBlobTree)
     children
 end
 
-Base.IteratorSize(tree::ZippedBlobTree) = Base.SizeUnknown()
-function Base.iterate(tree::ZippedBlobTree, state=nothing)
+Base.IteratorSize(tree::ZippedFileTree) = Base.SizeUnknown()
+function Base.iterate(tree::ZippedFileTree, state=nothing)
     if state == nothing
         children = _tree_children(tree)
         itr = iterate(children)
@@ -83,16 +83,16 @@ function Base.iterate(tree::ZippedBlobTree, state=nothing)
     end
 end
 
-function Base.joinpath(tree::ZippedBlobTree, r::RelPath)
+function Base.joinpath(tree::ZippedFileTree, r::RelPath)
     # Should this AbsPath be rooted at `tree` rather than `tree.root`?
     AbsPath(tree.root, joinpath(tree.path, r))
 end
 
-function Base.joinpath(tree::ZippedBlobTree, s::AbstractString)
+function Base.joinpath(tree::ZippedFileTree, s::AbstractString)
     AbsPath(tree.root, joinpath(tree.path, s))
 end
 
-function Base.open(func::Function, f::Blob{ZipTreeRoot}; write=false, read=!write)
+function Base.open(func::Function, f::File{ZipTreeRoot}; write=false, read=!write)
     if write
         error("Error writing file at read-only path $f")
     end
