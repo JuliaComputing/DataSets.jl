@@ -15,6 +15,9 @@ struct DataSet
     function DataSet(conf)
         _check_keys(conf, DataSet, ["uuid"=>String, "storage"=>Dict, "name"=>String])
         _check_keys(conf["storage"], DataSet, ["driver"=>String])
+        _check_optional_keys(conf,
+                             "description"=>AbstractString,
+                             "tags"=>VectorOf(AbstractString))
         check_dataset_name(conf["name"])
         new(UUID(conf["uuid"]), conf)
     end
@@ -52,9 +55,27 @@ function _check_keys(config, context, keys)
               Missing expected keys in $context:
               $missed_keys
 
-              In TOML fragment:
+              In DataSet fragment:
               $(sprint(TOML.print,config))
               """)
+    end
+end
+
+struct VectorOf
+    T
+end
+
+function _check_optional_keys(config, context, keys...)
+    for (k, check) in keys
+        if haskey(config, k)
+            v = config[k] 
+            if check isa Type && !(v isa check)
+                error("""Invalid DataSet key $k. Expected type $check""")
+            elseif check isa VectorOf && !(v isa AbstractVector &&
+                                           all(x isa check.T for x in v))
+                error("""Invalid DataSet key $k""")
+            end
+        end
     end
 end
 
