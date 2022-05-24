@@ -20,40 +20,6 @@ end
 
 DataSet(conf) = DataSet(nothing, conf)
 
-_key_match(config, (k,T)::Pair) = haskey(config, k) && config[k] isa T
-_key_match(config, k::String) = haskey(config, k)
-
-function _check_keys(config, context, keys)
-    missed_keys = filter(k->!_key_match(config, k), keys)
-    if !isempty(missed_keys)
-        error("""
-              Missing expected keys in $context:
-              $missed_keys
-
-              In DataSet fragment:
-              $(sprint(TOML.print,config))
-              """)
-    end
-end
-
-struct VectorOf
-    T
-end
-
-function _check_optional_keys(config, context, keys...)
-    for (k, check) in keys
-        if haskey(config, k)
-            v = config[k] 
-            if check isa Type && !(v isa check)
-                error("""Invalid DataSet key $k. Expected type $check""")
-            elseif check isa VectorOf && !(v isa AbstractVector &&
-                                           all(x isa check.T for x in v))
-                error("""Invalid DataSet key $k""")
-            end
-        end
-    end
-end
-
 function _validate_dataset_config(conf)
     _check_keys(conf, DataSet, ["uuid"=>String, "storage"=>Dict, "name"=>String])
     _check_keys(conf["storage"], DataSet, ["driver"=>String])
@@ -61,6 +27,16 @@ function _validate_dataset_config(conf)
                          "description"=>AbstractString,
                          "tags"=>VectorOf(AbstractString))
     check_dataset_name(conf["name"])
+end
+
+function Base.show(io::IO, d::DataSet)
+    print(io, DataSet, "(name=$(repr(d.name)), uuid=$(repr(d.uuid)), #= … =#)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
+    println(io, "DataSet instance:")
+    println(io)
+    TOML.print(io, d.conf)
 end
 
 """
@@ -130,16 +106,6 @@ function dataspec_fragment_as_path(d::DataSet)
         end
     end
     return nothing
-end
-
-function Base.show(io::IO, d::DataSet)
-    print(io, DataSet, "(name=$(repr(d.name)), uuid=$(repr(d.uuid)), #= … =#)")
-end
-
-function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
-    println(io, "DataSet instance:")
-    println(io)
-    TOML.print(io, d.conf)
 end
 
 function config(dataset::DataSet; kws...)
