@@ -128,7 +128,7 @@ Base.pairs(proj::AbstractTomlFileDataProject) = pairs(get_cache(proj))
 data_drivers(proj::AbstractTomlFileDataProject) = data_drivers(get_cache(proj))
 
 function config(proj::AbstractTomlFileDataProject, dataset::DataSet; kws...)
-    if dataset.project !== proj
+    if data_project(dataset) !== proj
         error("dataset must belong to project")
     end
     # Here we accept the update independently of the project - Data.toml should
@@ -155,6 +155,10 @@ end
 
 function get_cache(proj::TomlFileDataProject, refresh=true)
     get_cache(proj.cache, refresh)
+end
+
+function local_data_abspath(proj::TomlFileDataProject, relpath)
+    return joinpath(dirname(proj.path), relpath)
 end
 
 project_name(proj::TomlFileDataProject) = proj.path
@@ -207,6 +211,13 @@ function get_cache(proj::ActiveDataProject, allow_refresh=true)
     proj.cache isa DataProject ? proj.cache : get_cache(proj.cache, allow_refresh)
 end
 
+function local_data_abspath(proj::ActiveDataProject, relpath)
+    if isnothing(proj.active_project_path)
+        error("No active project")
+    end
+    return joinpath(dirname(proj.active_project_path), relpath)
+end
+
 project_name(::ActiveDataProject) = _active_project_data_toml()
 
 #-------------------------------------------------------------------------------
@@ -217,7 +228,15 @@ function _fill_template(toml_path, toml_str)
     if Sys.iswindows()
         toml_path = replace(toml_path, '\\'=>'/')
     end
-    toml_str = replace(toml_str, "@__DIR__"=>toml_path)
+    if occursin("@__DIR__", toml_str)
+        Base.depwarn("""
+            Using @__DIR__ in Data.toml is deprecated. Use a '/'-separated
+            relative path instead.""",
+            :_fill_template)
+        return replace(toml_str, "@__DIR__"=>toml_path)
+    else
+        return toml_str
+    end
 end
 
 function _load_project(content::AbstractString, sys_data_dir)
@@ -246,13 +265,17 @@ function from_path(path::AbstractString)
         throw(ArgumentError(msg))
     end
 
+    path_key = Sys.isunix()    ? "unix_path" :
+               Sys.iswindows() ? "windows_path" :
+               error("Unknown system: cannot determine path type")
+
     conf = Dict(
         "name"=>make_valid_dataset_name(path),
         "uuid"=>string(uuid4()),
         "storage"=>Dict(
             "driver"=>"FileSystem",
             "type"=>dtype,
-            "path"=>abspath(path),
+            path_key=>abspath(path),
         )
     )
 

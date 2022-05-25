@@ -52,9 +52,10 @@ function dataset(proj::AbstractDataProject, spec::AbstractString)
     conf = copy(dataset.conf)
     conf["dataspec"] = dataspec
 
-    # This copy is problematic now that datasets can be mutated: how can the
-    # dataset point back to its project without "dataspec" being updated?
-    return DataSet(conf)
+    # FIXME: This copy is problematic now that datasets can be mutated with
+    # `DataSets.config()` as "dataspec" will infect the dataset when it's
+    # saved again.
+    return DataSet(data_project(dataset), conf)
 end
 
 """
@@ -310,22 +311,18 @@ end
 
 #-------------------------------------------------------------------------------
 """
-    load_project(path; auto_update=false)
-    load_project(config_dict)
+    load_project(path)
 
-Load a data project from a system `path` referring to a TOML file. If
-`auto_update` is true, the returned project will monitor the file for updates
-and reload when necessary.
-
-Alternatively, create a `DataProject` from a an existing dictionary
-`config_dict`, which should be in the Data.toml format.
+Load a data project from a system `path` referring to a TOML file.
 
 See also [`load_project!`](@ref).
 """
-function load_project(path::AbstractString; auto_update=false)
+function load_project(path::AbstractString; auto_update=true)
     sys_path = abspath(path)
-    auto_update ? TomlFileDataProject(sys_path) :
-                  _load_project(read(sys_path,String), dirname(sys_path))
+    if !auto_update
+        Base.depwarn("`auto_update` is deprecated", :load_project)
+    end
+    TomlFileDataProject(sys_path)
 end
 
 function load_project(config::AbstractDict; kws...)

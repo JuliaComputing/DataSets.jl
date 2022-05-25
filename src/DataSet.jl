@@ -85,10 +85,13 @@ function check_dataset_name(name::AbstractString)
     end
 end
 
-# Hacky thing until we figure out which fields DataSet should actually have.
+#-------------------------------------------------------------------------------
+# API for DataSet type
 function Base.getproperty(d::DataSet, name::Symbol)
-    if name in fieldnames(DataSet)
-        return getfield(d, name)
+    if name === :uuid
+        getfield(d, :uuid)
+    elseif name === :conf
+        getfield(d, :conf)
     else
         getfield(d, :conf)[string(name)]
     end
@@ -96,6 +99,10 @@ end
 
 Base.getindex(d::DataSet, name::AbstractString) = getindex(d.conf, name)
 Base.haskey(d::DataSet, name::AbstractString) = haskey(d.conf, name)
+
+function data_project(dataset::DataSet)
+    return getfield(dataset, :project)
+end
 
 # Split the fragment section as a '/' separated RelPath
 function dataspec_fragment_as_path(d::DataSet)
@@ -109,7 +116,7 @@ function dataspec_fragment_as_path(d::DataSet)
 end
 
 function config(dataset::DataSet; kws...)
-    config(dataset.project, dataset; kws...)
+    config(data_project(dataset), dataset; kws...)
 end
 
 # The default case of a dataset config update when the update is independent of

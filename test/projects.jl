@@ -33,12 +33,6 @@ test_project_names = ["a_text_file",
 
     # identity
     @test project_name(proj) == abspath("Data.toml")
-
-    # Test @__DIR__ templating
-    # Use `cleanpath` as there's currently a mixture of / and \ on windows
-    # which does work, but is quite ugly.
-    cleanpath(p) = replace(p, '\\'=>'/')
-    @test cleanpath(proj["a_text_file"].storage["path"]) == cleanpath(joinpath(@__DIR__, "data", "file.txt"))
 end
 
 @testset "TomlFileDataProject live updates" begin
@@ -55,7 +49,7 @@ end
             [datasets.storage]
             driver="FileSystem"
             type="File"
-            path="@__DIR__/data/file.txt"
+            path="data/file.txt"
         """)
         flush(io)
 
@@ -74,7 +68,7 @@ end
             [datasets.storage]
             driver="FileSystem"
             type="File"
-            path="@__DIR__/data/file2.txt"
+            path="data/file2.txt"
         """)
         flush(io)
 
