@@ -3,12 +3,18 @@
 ## Using datasets
 
 The primary mechanism for loading datasets is the `dataset` function, coupled
-with `open()` to open the resulting `DataSet` as some Julia type. In addition,
-DataSets.jl provides two macros [`@datafunc`](@ref) and [`@datarun`](@ref) to
-help in creating program entry points and running them.
+with `open()` to open the resulting `DataSet` as some Julia type.
 
 ```@docs
 dataset
+```
+
+In addition, DataSets.jl provides two macros [`@datafunc`](@ref) and
+[`@datarun`](@ref) to help in creating program entry points and running them.
+Note that these APIs aren't fully formed and might be deprecated before
+DataSets-1.0.
+
+```@docs
 @datafunc
 @datarun
 ```
@@ -46,6 +52,14 @@ DataSets.ActiveDataProject
 DataSets.TomlFileDataProject
 ```
 
+### Modifying datasets
+
+The metadata for a dataset may be updated using `config!`
+
+```@docs
+DataSets.config!
+```
+
 ## Data Models for files and directories
 
 DataSets provides some builtin data models [`File`](@ref) and
@@ -62,7 +76,7 @@ newdir
 
 ## Storage Drivers
 
-To add a new kind of data storage backend, implement [`DataSets.add_storage_driver`](@ref)
+To add a new kind of data storage backend, call [`DataSets.add_storage_driver`](@ref)
 
 ```@docs
 DataSets.add_storage_driver

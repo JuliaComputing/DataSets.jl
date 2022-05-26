@@ -20,7 +20,7 @@ end
 
 @testset "DataSet config from Dict" begin
     config = Dict(
-        "data_config_version"=>0,
+        "data_config_version"=>1,
         "datasets"=>[Dict(
             "description"=>"A text file",
             "name"=>"a_text_file",

@@ -115,16 +115,18 @@ function dataspec_fragment_as_path(d::DataSet)
     return nothing
 end
 
-function config(dataset::DataSet; kws...)
-    config(data_project(dataset), dataset; kws...)
+function config!(dataset::DataSet; kws...)
+    config!(data_project(dataset), dataset; kws...)
 end
 
 # The default case of a dataset config update when the update is independent of
 # the project.  (In general, projects may supply extra constraints.)
-function config(::Nothing, dataset::DataSet; kws...)
+function config!(::Nothing, dataset::DataSet; kws...)
     for (k,v) in pairs(kws)
         if k in (:uuid, :name)
             error("Cannot modify dataset config with key $k")
+        # TODO: elseif k === :storage
+            # Check consistency using storage driver API?
         end
         dataset.conf[string(k)] = v
     end

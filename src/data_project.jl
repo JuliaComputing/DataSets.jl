@@ -53,16 +53,16 @@ function dataset(proj::AbstractDataProject, spec::AbstractString)
     conf["dataspec"] = dataspec
 
     # FIXME: This copy is problematic now that datasets can be mutated with
-    # `DataSets.config()` as "dataspec" will infect the dataset when it's
+    # `DataSets.config!()` as "dataspec" will infect the dataset when it's
     # saved again.
     return DataSet(data_project(dataset), conf)
 end
 
 """
-    config(name::AbstractString; kws...)
-    config(proj::AbstractDataProject, name::AbstractString; kws...)
+    config!(name::AbstractString; kws...)
+    config!(proj::AbstractDataProject, name::AbstractString; kws...)
 
-    config(dataset::DataSet; kws...)
+    config!(dataset::DataSet; kws...)
 
 Update the configuration of `dataset` with the given keyword arguments and
 persist it in the dataset's project storage. The versions which take a `name`
@@ -72,17 +72,17 @@ use that name to search within the given data project.
 
 Update the dataset with name "SomeData" in the global project
 ```
-DataSets.config("SomeData"; description="This is a description")
+DataSets.config!("SomeData"; description="This is a description")
 ```
 
 Tag the dataset "SomeData" with tags "A" and "B".
 ```
 ds = dataset("SomeData")
-config(ds, tags=["A", "B"])
+DataSets.config!(ds, tags=["A", "B"])
 ```
 """
-function config(project::AbstractDataProject, name::AbstractString; kws...)
-    config(project[name]; kws...)
+function config!(project::AbstractDataProject, name::AbstractString; kws...)
+    config!(project[name]; kws...)
 end
 
 # Percent-decode a string according to the URI escaping rules.
@@ -365,6 +365,6 @@ function save_project(path::AbstractString, proj::DataProject)
     end
 end
 
-function config(name::AbstractString; kws...)
-    config(PROJECT, name; kws...)
+function config!(name::AbstractString; kws...)
+    config!(PROJECT, name; kws...)
 end

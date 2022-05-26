@@ -39,7 +39,7 @@ end
     # Test live updating when the file is rewritten
     mktemp() do path,io
         write(io, """
-        data_config_version=0
+        data_config_version=1
 
         [[datasets]]
         description="A text file"

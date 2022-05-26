@@ -127,13 +127,13 @@ Base.pairs(proj::AbstractTomlFileDataProject) = pairs(get_cache(proj))
 
 data_drivers(proj::AbstractTomlFileDataProject) = data_drivers(get_cache(proj))
 
-function config(proj::AbstractTomlFileDataProject, dataset::DataSet; kws...)
+function config!(proj::AbstractTomlFileDataProject, dataset::DataSet; kws...)
     if data_project(dataset) !== proj
         error("dataset must belong to project")
     end
     # Here we accept the update independently of the project - Data.toml should
     # be able to manage any dataset config.
-    config(nothing, dataset; kws...)
+    config!(nothing, dataset; kws...)
     save_project(proj.path, get_cache(proj, false))
     return dataset
 end
