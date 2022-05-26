@@ -70,15 +70,16 @@ use that name to search within the given data project.
 
 # Examples
 
-Update the dataset with name "SomeData" in the global project
+Update the description of the dataset named `"SomeData"` in the global project:
 ```
 DataSets.config!("SomeData"; description="This is a description")
 ```
 
-Tag the dataset "SomeData" with tags "A" and "B".
+Alternatively, setting `DataSet` properties can be used to update metadata. For
+example, to tag the dataset "SomeData" with tags `"A"` and `"B"`.
 ```
 ds = dataset("SomeData")
-DataSets.config!(ds, tags=["A", "B"])
+ds.tags = ["A", "B"]
 ```
 """
 function config!(project::AbstractDataProject, name::AbstractString; kws...)
@@ -351,18 +352,14 @@ function load_project(config::AbstractDict; kws...)
     proj
 end
 
-function save_project(path::AbstractString, proj::DataProject)
-    # TODO: Put this TOML conversion in DataProject ?
+function project_toml(proj::DataProject)
+    # FIXME: Preserve other unknown keys here for forward compatibility.
     conf = Dict(
         "data_config_version"=>CURRENT_DATA_CONFIG_VERSION,
         "datasets"=>[d.conf for (n,d) in proj.datasets],
         "drivers"=>proj.drivers
     )
-    mktemp(dirname(path)) do tmppath, tmpio
-        TOML.print(tmpio, conf)
-        close(tmpio)
-        mv(tmppath, path, force=true)
-    end
+    return sprint(TOML.print, conf)
 end
 
 function config!(name::AbstractString; kws...)

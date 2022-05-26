@@ -97,6 +97,10 @@ function Base.getproperty(d::DataSet, name::Symbol)
     end
 end
 
+function Base.setproperty!(d::DataSet, name::Symbol, x)
+    config!(d; name=>x)
+end
+
 Base.getindex(d::DataSet, name::AbstractString) = getindex(d.conf, name)
 Base.haskey(d::DataSet, name::AbstractString) = haskey(d.conf, name)
 
@@ -127,6 +131,17 @@ function config!(::Nothing, dataset::DataSet; kws...)
             error("Cannot modify dataset config with key $k")
         # TODO: elseif k === :storage
             # Check consistency using storage driver API?
+        end
+        # TODO: Fold these schema checks in with _validate_dataset_config
+        # somehow.
+        if k === :description
+            if !(v isa AbstractString)
+                error("Dataset description must be a string")
+            end
+        elseif k === :tags
+            if !(v isa AbstractVector && all(x isa AbstractString for x in v))
+                error("Dataset tags must be a vector of strings")
+            end
         end
         dataset.conf[string(k)] = v
     end

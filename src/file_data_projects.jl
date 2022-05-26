@@ -69,6 +69,20 @@ function get_cache(f::CachedParsedFile, allow_refresh=true)
     return f.d
 end
 
+function set_cache(f::CachedParsedFile, content::AbstractString)
+    mktemp(dirname(f.path)) do tmppath, tmpio
+        write(tmpio, content)
+        close(tmpio)
+        # Uses mktemp() + mv() to atomically overwrite the file
+        mv(tmppath, f.path, force=true)
+    end
+    s = stat(f.path)
+    f.inode = s.inode
+    f.mtime = s.mtime
+    f.size = s.size
+    f.hash = sha1(content)
+end
+
 function Base.show(io::IO, m::MIME"text/plain", f::CachedParsedFile)
     println(io, "Cache of file $(repr(f.path)) with value")
     show(io, m, get_cache(f))
@@ -83,7 +97,9 @@ function parse_and_cache_project(proj, sys_path::AbstractString)
         else
             inner_proj = _load_project(String(content), sys_data_dir)
             for d in inner_proj
-                d.project = proj
+                # Hack; we steal ownership from the DataProject here.
+                # What's a better way to do this?
+                setfield!(d, :project, proj)
             end
             inner_proj
         end
@@ -134,7 +150,7 @@ function config!(proj::AbstractTomlFileDataProject, dataset::DataSet; kws...)
     # Here we accept the update independently of the project - Data.toml should
     # be able to manage any dataset config.
     config!(nothing, dataset; kws...)
-    save_project(proj.path, get_cache(proj, false))
+    set_cache(proj, project_toml(get_cache(proj, false)))
     return dataset
 end
 
@@ -155,6 +171,10 @@ end
 
 function get_cache(proj::TomlFileDataProject, refresh=true)
     get_cache(proj.cache, refresh)
+end
+
+function set_cache(proj::TomlFileDataProject, content::AbstractString)
+    set_cache(proj.cache, content)
 end
 
 function local_data_abspath(proj::TomlFileDataProject, relpath)
@@ -209,6 +229,14 @@ function get_cache(proj::ActiveDataProject, allow_refresh=true)
         proj.active_project_path = active_project
     end
     proj.cache isa DataProject ? proj.cache : get_cache(proj.cache, allow_refresh)
+end
+
+function set_cache(proj::ActiveDataProject, content::AbstractString)
+    if proj.cache isa DataProject
+        error("No current active project")
+    else
+        set_cache(proj.cache, content)
+    end
 end
 
 function local_data_abspath(proj::ActiveDataProject, relpath)
