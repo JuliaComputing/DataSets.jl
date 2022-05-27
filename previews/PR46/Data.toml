@@ -13,6 +13,8 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
     [datasets.storage]
     # The name of the storage driver.
     driver="FileSystem"
+    # The version of the configuration within the [storage] section
+    confver="1"
     # Data stored in FileSystem is either File (a file) or FileTree (a directory/folder)
     type="File"
     # Path with posix `/` separators.
@@ -27,6 +29,7 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
     [datasets.storage]
     driver="FileSystem"
+    confver="1"
     type="FileTree"
     path="data/csvset"
 
