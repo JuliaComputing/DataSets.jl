@@ -250,25 +250,20 @@ project_name(::ActiveDataProject) = _active_project_data_toml()
 
 #-------------------------------------------------------------------------------
 
-function _fill_template(toml_path, toml_str)
-    # Super hacky templating for paths relative to the toml file.
-    # We really should have something a lot nicer here...
-    if Sys.iswindows()
-        toml_path = replace(toml_path, '\\'=>'/')
-    end
+function _fill_template(toml_str)
     if occursin("@__DIR__", toml_str)
         Base.depwarn("""
             Using @__DIR__ in Data.toml is deprecated. Use a '/'-separated
             relative path instead.""",
             :_fill_template)
-        return replace(toml_str, "@__DIR__"=>toml_path)
+        return replace(toml_str, "@__DIR__"=>".")
     else
         return toml_str
     end
 end
 
 function _load_project(content::AbstractString, sys_data_dir)
-    toml_str = _fill_template(sys_data_dir, content)
+    toml_str = _fill_template(content)
     config = TOML.parse(toml_str)
     load_project(config)
 end
