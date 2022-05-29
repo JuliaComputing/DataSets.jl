@@ -12,6 +12,7 @@ DocTestFilters = [
     r"path =.*",
     r"@.*",
     r"(?<=IOStream\().*",
+    r"(?<=TomlFileDataProject \[).*",
 ]
 ```
 
@@ -71,7 +72,7 @@ global configuration this is also possible:
 
 ```jldoctest
 julia> project = DataSets.load_project("src/Data.toml")
-DataSets.DataProject:
+DataSets.TomlFileDataProject [.../DataSets/docs/src/Data.toml]:
   📄 a_text_file    => b498f769-a7f6-4f67-8d74-40b770398f26
   📁 a_tree_example => e7fd7080-e346-4a68-9ca9-98593a99266a
 

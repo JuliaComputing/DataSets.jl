@@ -52,9 +52,39 @@ function dataset(proj::AbstractDataProject, spec::AbstractString)
     conf = copy(dataset.conf)
     conf["dataspec"] = dataspec
 
-    return DataSet(conf)
+    # FIXME: This copy is problematic now that datasets can be mutated with
+    # `DataSets.config!()` as "dataspec" will infect the dataset when it's
+    # saved again.
+    return DataSet(data_project(dataset), conf)
 end
 
+"""
+    config!(name::AbstractString; kws...)
+    config!(proj::AbstractDataProject, name::AbstractString; kws...)
+
+    config!(dataset::DataSet; kws...)
+
+Update the configuration of `dataset` with the given keyword arguments and
+persist it in the dataset's project storage. The versions which take a `name`
+use that name to search within the given data project.
+
+# Examples
+
+Update the description of the dataset named `"SomeData"` in the global project:
+```
+DataSets.config!("SomeData"; description="This is a description")
+```
+
+Alternatively, setting `DataSet` properties can be used to update metadata. For
+example, to tag the dataset "SomeData" with tags `"A"` and `"B"`.
+```
+ds = dataset("SomeData")
+ds.tags = ["A", "B"]
+```
+"""
+function config!(project::AbstractDataProject, name::AbstractString; kws...)
+    config!(project[name]; kws...)
+end
 
 # Percent-decode a string according to the URI escaping rules.
 # Vendored from URIs.jl for now to avoid depending on that entire package for
@@ -282,22 +312,18 @@ end
 
 #-------------------------------------------------------------------------------
 """
-    load_project(path; auto_update=false)
-    load_project(config_dict)
+    load_project(path)
 
-Load a data project from a system `path` referring to a TOML file. If
-`auto_update` is true, the returned project will monitor the file for updates
-and reload when necessary.
-
-Alternatively, create a `DataProject` from a an existing dictionary
-`config_dict`, which should be in the Data.toml format.
+Load a data project from a system `path` referring to a TOML file.
 
 See also [`load_project!`](@ref).
 """
-function load_project(path::AbstractString; auto_update=false)
+function load_project(path::AbstractString; auto_update=true)
     sys_path = abspath(path)
-    auto_update ? TomlFileDataProject(sys_path) :
-                  _load_project(read(sys_path,String), dirname(sys_path))
+    if !auto_update
+        Base.depwarn("`auto_update` is deprecated", :load_project)
+    end
+    TomlFileDataProject(sys_path)
 end
 
 function load_project(config::AbstractDict; kws...)
@@ -312,7 +338,7 @@ function load_project(config::AbstractDict; kws...)
     end
     proj = DataProject()
     for dataset_conf in config["datasets"]
-        dataset = DataSet(dataset_conf)
+        dataset = DataSet(proj, dataset_conf)
         proj[dataset.name] = dataset
     end
     if haskey(config, "drivers")
@@ -326,3 +352,16 @@ function load_project(config::AbstractDict; kws...)
     proj
 end
 
+function project_toml(proj::DataProject)
+    # FIXME: Preserve other unknown keys here for forward compatibility.
+    conf = Dict(
+        "data_config_version"=>CURRENT_DATA_CONFIG_VERSION,
+        "datasets"=>[d.conf for (n,d) in proj.datasets],
+        "drivers"=>proj.drivers
+    )
+    return sprint(TOML.print, conf)
+end
+
+function config!(name::AbstractString; kws...)
+    config!(PROJECT, name; kws...)
+end

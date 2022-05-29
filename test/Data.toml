@@ -12,16 +12,7 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
     [datasets.storage]
     driver="FileSystem"
     type="File"
-    path="@__DIR__/data/file.txt"
-
-    # TODO: We'd like a layering abstraction.
-
-    # [[datasets.maps]]
-    # type="File"
-    #
-    # [[datasets.maps]]
-    # type="text"
-    # parameters={encoding="UTF-8"}
+    path="data/file.txt"
 
 [[datasets]]
 description="A text file with namespace"
@@ -31,7 +22,7 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
     [datasets.storage]
     driver="FileSystem"
     type="File"
-    path="@__DIR__/data/file.txt"
+    path="data/file.txt"
 
 #--------------------------------------------------
 [[datasets]]
@@ -42,15 +33,7 @@ uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
     [datasets.storage]
     driver="FileSystem"
     type="File"
-    path="@__DIR__/data/people.csv.gz"
-
-    #[[datasets.maps]]
-    #type="GZip"
-    #
-    #[[datasets.maps]]
-    #type="CSV"
-    #parameters={delim=","}
-
+    path="data/people.csv.gz"
 
 #--------------------------------------------------
 [[datasets]]
@@ -60,10 +43,7 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
     [datasets.storage]
     driver="FileSystem"
     type="FileTree"
-    path="@__DIR__/data/csvset"
-
-    # TODO: Add data maps here which expose it logically as a single CSV?
-
+    path="data/csvset"
 
 #--------------------------------------------------
 # Data embedded in the TOML

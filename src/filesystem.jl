@@ -1,24 +1,6 @@
 """
 Root storage object for trees which are rooted in the file system (in git
 terminology, there exists a "working copy")
-
-## Metadata spec
-
-For File:
-```
-    [datasets.storage]
-    driver="FileSystem"
-    type="File"
-    path=\$(path_to_file)
-```
-
-For FileTree:
-```
-    [datasets.storage]
-    driver="FileSystem"
-    type="FileTree"
-    path=\$(path_to_directory)
-```
 """
 mutable struct FileSystemRoot
     path::String
@@ -247,10 +229,83 @@ end
 
 
 #--------------------------------------------------
+# FileSystem storage driver
 
-# Filesystem storage driver
+"""
+    local_data_abspath(project, relpath)
+
+Return the absolute path of data on disk where `relpath` is relative to
+`project`.
+
+This function must be implemented for any `AbstractDataProject` subtype which
+intends to support the `FileSystem` data driver.
+"""
+function local_data_abspath
+end
+
+
+function local_data_abspath(::Nothing, path)
+    error("Path must be absolute for DataSets without parent data projects")
+end
+
+
+"""
+## Metadata spec
+
+For File:
+```
+    [datasets.storage]
+    driver="FileSystem"
+    type="File"
+    \$path_key=\$(path_string)
+```
+
+For FileTree:
+```
+    [datasets.storage]
+    driver="FileSystem"
+    type="FileTree"
+    \$path_key=\$(path_string)
+```
+
+`path_key` should be one of the following forms:
+```
+    path=\$(relative_slash_separated_path_to_file)
+    unix_path=\$(absolute_unix_path_to_file)
+    windows_path=\$(absolute_windows_path_to_file)
+```
+"""
 function connect_filesystem(f, config, dataset)
-    path = config["path"]
+    # Paths keys can be in three forms documented above;
+    if haskey(config, "path")
+        pathstr = config["path"]
+        # Local absolute paths are not portable. Previously these were allowed
+        # in the "path" key, but those are now deprecated in favor of
+        # system-specific path keys unix_path or windows_path
+        if isabspath(pathstr)
+            Base.depwarn("""
+                Absolute paths in Data.toml are deprecated. Instead, use relative
+                paths (separated with `/`) relative to the Data.toml location.""",
+                :connect_filesystem)
+            path = pathstr
+        else
+            if '\\' in pathstr && Sys.iswindows()
+                # Heuristic deprecation warning for windows paths in Data.toml
+                Base.depwarn(
+                    "Relative paths in Data.toml should be separated with '/' characters.",
+                    :connect_filesystem)
+                pathstr = join(split(pathstr, '\\'), '/')
+            end
+            relpath = joinpath(split(pathstr, '/')...)
+            path = local_data_abspath(data_project(dataset), relpath)
+        end
+    elseif haskey(config, "unix_path") && Sys.isunix()
+        path = config["unix_path"]
+    elseif haskey(config, "windows_path") && Sys.iswindows()
+        path = config["windows_path"]
+    else
+        error("No \"path\" key found for FileSystem storage driver.")
+    end
     type = config["type"]
     if type in ("File", "Blob")
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))

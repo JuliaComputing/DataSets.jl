@@ -5,57 +5,38 @@ unopinionated about the underlying storage mechanism.
 The data in a `DataSet` has a type which implies an index; the index can be
 used to partition the data for processing.
 """
-struct DataSet
-    # For now, the representation `conf` contains data read directly from the
-    # TOML. Once the design has settled we might get some explicit fields and
-    # do validation.
+mutable struct DataSet
+    project        # AbstractDataProject owning this DataSet
     uuid::UUID     # Unique identifier for the dataset. Use uuid4() to create these.
+    # The representation `conf` contains "configuration data" read directly from
+    # the TOML (or other data project source, eg json API etc)
     conf
 
-    function DataSet(conf)
-        _check_keys(conf, DataSet, ["uuid"=>String, "storage"=>Dict, "name"=>String])
-        _check_keys(conf["storage"], DataSet, ["driver"=>String])
-        check_dataset_name(conf["name"])
-        new(UUID(conf["uuid"]), conf)
+    function DataSet(project, conf)
+        _validate_dataset_config(conf)
+        new(project, UUID(conf["uuid"]), conf)
     end
-
-    #=
-    name::String # Default name for convenience.
-                         # The binding to an actual name is managed by the data
-                         # project.
-    storage        # Storage config and driver definition
-    maps::Vector{DataMap}
-
-    # Generic dictionary of other properties... for now. Required properties
-    # will be moved
-    _other::Dict{Symbol,Any}
-
-    #storage_id     # unique identifier in storage backend, if it exists
-    #owner          # Project or user who owns the data
-    #description::String
-    #type           # Some representation of the type of data?
-    #               # An array, blob, table, tree, etc
-    #cachable::Bool # Can the data be cached?  It might not for data governance
-    #               # reasons or it might change commonly.
-    ## A set of identifiers
-    #tags::Set{String}
-    =#
 end
 
-_key_match(config, (k,T)::Pair) = haskey(config, k) && config[k] isa T
-_key_match(config, k::String) = haskey(config, k)
+DataSet(conf) = DataSet(nothing, conf)
 
-function _check_keys(config, context, keys)
-    missed_keys = filter(k->!_key_match(config, k), keys)
-    if !isempty(missed_keys)
-        error("""
-              Missing expected keys in $context:
-              $missed_keys
+function _validate_dataset_config(conf)
+    _check_keys(conf, DataSet, ["uuid"=>String, "storage"=>Dict, "name"=>String])
+    _check_keys(conf["storage"], DataSet, ["driver"=>String])
+    _check_optional_keys(conf,
+                         "description"=>AbstractString,
+                         "tags"=>VectorOf(AbstractString))
+    check_dataset_name(conf["name"])
+end
 
-              In TOML fragment:
-              $(sprint(TOML.print,config))
-              """)
-    end
+function Base.show(io::IO, d::DataSet)
+    print(io, DataSet, "(name=$(repr(d.name)), uuid=$(repr(d.uuid)), #= … =#)")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
+    println(io, "DataSet instance:")
+    println(io)
+    TOML.print(io, d.conf)
 end
 
 """
@@ -104,17 +85,28 @@ function check_dataset_name(name::AbstractString)
     end
 end
 
-# Hacky thing until we figure out which fields DataSet should actually have.
+#-------------------------------------------------------------------------------
+# API for DataSet type
 function Base.getproperty(d::DataSet, name::Symbol)
-    if name in fieldnames(DataSet)
-        return getfield(d, name)
+    if name === :uuid
+        getfield(d, :uuid)
+    elseif name === :conf
+        getfield(d, :conf)
     else
         getfield(d, :conf)[string(name)]
     end
 end
 
+function Base.setproperty!(d::DataSet, name::Symbol, x)
+    config!(d; name=>x)
+end
+
 Base.getindex(d::DataSet, name::AbstractString) = getindex(d.conf, name)
 Base.haskey(d::DataSet, name::AbstractString) = haskey(d.conf, name)
+
+function data_project(dataset::DataSet)
+    return getfield(dataset, :project)
+end
 
 # Split the fragment section as a '/' separated RelPath
 function dataspec_fragment_as_path(d::DataSet)
@@ -127,16 +119,34 @@ function dataspec_fragment_as_path(d::DataSet)
     return nothing
 end
 
-function Base.show(io::IO, d::DataSet)
-    print(io, DataSet, "(name=$(repr(d.name)), uuid=$(repr(d.uuid)), #= … =#)")
+function config!(dataset::DataSet; kws...)
+    config!(data_project(dataset), dataset; kws...)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
-    println(io, "DataSet instance:")
-    println(io)
-    TOML.print(io, d.conf)
+# The default case of a dataset config update when the update is independent of
+# the project.  (In general, projects may supply extra constraints.)
+function config!(::Nothing, dataset::DataSet; kws...)
+    for (k,v) in pairs(kws)
+        if k in (:uuid, :name)
+            error("Cannot modify dataset config with key $k")
+        # TODO: elseif k === :storage
+            # Check consistency using storage driver API?
+        end
+        # TODO: Fold these schema checks in with _validate_dataset_config
+        # somehow.
+        if k === :description
+            if !(v isa AbstractString)
+                error("Dataset description must be a string")
+            end
+        elseif k === :tags
+            if !(v isa AbstractVector && all(x isa AbstractString for x in v))
+                error("Dataset tags must be a vector of strings")
+            end
+        end
+        dataset.conf[string(k)] = v
+    end
+    return dataset
 end
-
 
 #-------------------------------------------------------------------------------
 # Functions for opening datasets

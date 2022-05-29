@@ -82,7 +82,7 @@ DataSets.add_storage_driver("OldBackendAPI"=>connect_old_backend)
     @test read(open(dataset(proj, "old_backend_tree"))[path"b.txt"], String) == "b"
 end
 
-@testset "Compat for renaming Blob->File, BlobTree->FileTree" begin
+@testset "Compat for @__DIR__ and renaming Blob->File, BlobTree->FileTree" begin
     proj = DataSets.load_project(joinpath(@__DIR__, "DataCompat.toml"))
 
     text_data = dataset(proj, "a_text_file")

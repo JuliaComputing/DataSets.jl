@@ -218,6 +218,8 @@ end
 
 
 #-------------------------------------------------------------------------------
+include("utils.jl")
+
 # Application entry points
 include("entrypoint.jl")
 

@@ -16,8 +16,8 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
     # Data stored in FileSystem is either File (a file) or FileTree (a directory/folder)
     type="File"
     # Path with posix `/` separators.
-    # Use @__DIR__ for paths relative to Data.toml
-    path="@__DIR__/data/file.txt"
+    # Relative paths are relative to the location of Data.toml
+    path="data/file.txt"
 
 # A second example
 [[datasets]]
@@ -28,7 +28,7 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
     [datasets.storage]
     driver="FileSystem"
     type="FileTree"
-    path="@__DIR__/data/csvset"
+    path="data/csvset"
 
 # Further datasets can be added as desired
 # [[datasets]]

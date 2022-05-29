@@ -6,7 +6,8 @@ using DataSets:
     TomlFileDataProject,
     ActiveDataProject,
     StackedDataProject,
-    project_name
+    project_name,
+    config!
 
 test_project_names = ["a_text_file",
                       "a_tree_example",
@@ -33,19 +34,13 @@ test_project_names = ["a_text_file",
 
     # identity
     @test project_name(proj) == abspath("Data.toml")
-
-    # Test @__DIR__ templating
-    # Use `cleanpath` as there's currently a mixture of / and \ on windows
-    # which does work, but is quite ugly.
-    cleanpath(p) = replace(p, '\\'=>'/')
-    @test cleanpath(proj["a_text_file"].storage["path"]) == cleanpath(joinpath(@__DIR__, "data", "file.txt"))
 end
 
 @testset "TomlFileDataProject live updates" begin
     # Test live updating when the file is rewritten
     mktemp() do path,io
         write(io, """
-        data_config_version=0
+        data_config_version=1
 
         [[datasets]]
         description="A text file"
@@ -55,7 +50,7 @@ end
             [datasets.storage]
             driver="FileSystem"
             type="File"
-            path="@__DIR__/data/file.txt"
+            path="data/file.txt"
         """)
         flush(io)
 
@@ -74,7 +69,7 @@ end
             [datasets.storage]
             driver="FileSystem"
             type="File"
-            path="@__DIR__/data/file2.txt"
+            path="data/file2.txt"
         """)
         flush(io)
 
@@ -136,3 +131,63 @@ end
     @test project_name(DataSets.PROJECT.projects[1]) == joinpath(@__DIR__, "Data.toml")
 end
 
+@testset "config!() metadata update" begin
+    # Test live updating when the file is rewritten
+    mktempdir() do tmppath
+        data_toml_path = joinpath(tmppath, "Data.toml")
+        open(data_toml_path, write=true) do io
+            write(io, """
+            data_config_version=1
+
+            [[datasets]]
+            description="A"
+            name="a_text_file"
+            uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
+
+                [datasets.storage]
+                driver="FileSystem"
+                type="File"
+                path="data/file.txt"
+            """)
+        end
+
+        proj = TomlFileDataProject(data_toml_path)
+        @testset "config!(proj, ...)" begin
+            @test dataset(proj, "a_text_file").description == "A"
+            config!(proj, "a_text_file", description="B")
+            config!(proj, "a_text_file", tags=Any["xx", "yy"])
+            @test dataset(proj, "a_text_file").description == "B"
+            @test dataset(proj, "a_text_file").tags == ["xx", "yy"]
+        end
+
+        @testset "Persistence on disk" begin
+            proj2 = TomlFileDataProject(data_toml_path)
+            @test dataset(proj2, "a_text_file").description == "B"
+            @test dataset(proj2, "a_text_file").tags == ["xx", "yy"]
+        end
+
+        @testset "config! via DataSet instances" begin
+            ds = dataset(proj, "a_text_file")
+            config!(ds, description = "C")
+            @test dataset(proj, "a_text_file").description == "C"
+            ds.description = "D"
+            @test dataset(proj, "a_text_file").description == "D"
+        end
+
+        @testset "description and tags validation" begin
+            ds = dataset(proj, "a_text_file")
+            @test_throws Exception config!(ds, description = 1)
+            @test_throws Exception config!(ds, tags = "hi")
+        end
+
+        @testset "global config! methods" begin
+            empty!(DataSets.PROJECT)
+            pushfirst!(DataSets.PROJECT, TomlFileDataProject(data_toml_path))
+
+            config!("a_text_file", description="X")
+            @test dataset("a_text_file").description == "X"
+
+            empty!(DataSets.PROJECT)
+        end
+    end
+end
