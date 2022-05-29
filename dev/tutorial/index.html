@@ -17,8 +17,8 @@ uuid=&quot;b498f769-a7f6-4f67-8d74-40b770398f26&quot;
     # Data stored in FileSystem is either File (a file) or FileTree (a directory/folder)
     type=&quot;File&quot;
     # Path with posix `/` separators.
-    # Use @__DIR__ for paths relative to Data.toml
-    path=&quot;@__DIR__/data/file.txt&quot;
+    # Relative paths are relative to the location of Data.toml
+    path=&quot;data/file.txt&quot;
 
 # A second example
 [[datasets]]
@@ -29,7 +29,7 @@ uuid=&quot;e7fd7080-e346-4a68-9ca9-98593a99266a&quot;
     [datasets.storage]
     driver=&quot;FileSystem&quot;
     type=&quot;FileTree&quot;
-    path=&quot;@__DIR__/data/csvset&quot;
+    path=&quot;data/csvset&quot;
 
 # Further datasets can be added as desired
 # [[datasets]]
@@ -51,7 +51,7 @@ description = &quot;A text file containing the standard greeting&quot;
 driver = &quot;FileSystem&quot;
 type = &quot;File&quot;
 path = &quot;.../DataSets/docs/src/data/file.txt&quot;</code></pre><p>If you prefer to pass around the data project explicitly rather than relying on global configuration this is also possible:</p><pre><code class="language-julia-repl">julia&gt; project = DataSets.load_project(&quot;src/Data.toml&quot;)
-DataSets.DataProject:
+DataSets.TomlFileDataProject [.../DataSets/docs/src/Data.toml]:
   📄 a_text_file    =&gt; b498f769-a7f6-4f67-8d74-40b770398f26
   📁 a_tree_example =&gt; e7fd7080-e346-4a68-9ca9-98593a99266a
 
@@ -127,4 +127,4 @@ main (generic function with 2 methods)
 
 julia&gt; @datarun main(&quot;a_text_file&quot;, &quot;a_tree_example&quot;);
 x = &quot;Hello world!\n&quot;
-csv_data = &quot;Name,Age\n\&quot;Aaron\&quot;,23\n\&quot;Harry\&quot;,42\n&quot;</code></pre><p>In a given program it&#39;s possible to have multiple entry points by simply defining multiple <code>@datafunc</code> implementations. In this case <code>@datarun</code> will dispatch to the entry point with the matching <code>DataSet</code> type.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../reference/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Friday 20 May 2022 08:30">Friday 20 May 2022</span>. Using Julia version 1.6.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+csv_data = &quot;Name,Age\n\&quot;Aaron\&quot;,23\n\&quot;Harry\&quot;,42\n&quot;</code></pre><p>In a given program it&#39;s possible to have multiple entry points by simply defining multiple <code>@datafunc</code> implementations. In this case <code>@datarun</code> will dispatch to the entry point with the matching <code>DataSet</code> type.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../reference/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Sunday 29 May 2022 04:33">Sunday 29 May 2022</span>. Using Julia version 1.6.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
