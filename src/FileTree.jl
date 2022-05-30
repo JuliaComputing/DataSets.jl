@@ -389,7 +389,7 @@ newfile(tree::FileTree, path::AbstractString; kws...) =
 newfile(func::Function, tree::FileTree, path::AbstractString; kws...) =
     newfile(func, tree, RelPath(path); kws...)
 Base.delete!(tree::FileTree, path::AbstractString) =
-    delete!(tree, RelPath(path))
+    Base.delete!(tree, RelPath(path))
 
 function _check_writeable(tree)
     if !iswriteable(tree.root)
@@ -457,7 +457,7 @@ function Base.delete!(tree::FileTree, path::RelPath)
     _check_writeable(tree)
     relpath = joinpath(tree.path, path)
     root = tree.root
-    delete!(root, relpath)
+    Base.delete!(root, relpath)
 end
 
 function Base.open(f::Function, ::Type{FileTree}, tree::FileTree)

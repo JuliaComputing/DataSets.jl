@@ -147,14 +147,21 @@ function config!(proj::AbstractTomlFileDataProject, dataset::DataSet; kws...)
     if data_project(dataset) !== proj
         error("dataset must belong to project")
     end
-    # Here we accept the update independently of the project - Data.toml should
-    # be able to manage any dataset config.
-    config!(nothing, dataset; kws...)
-    set_cache(proj, project_toml(get_cache(proj, false)))
+    _save_project(proj) do inner_proj
+        # Here we accept the update independently of the project - Data.toml
+        # should be able to manage any dataset config.
+        config!(nothing, dataset; kws...)
+        inner_proj
+    end
     return dataset
 end
 
-function create(proj::AbstractTomlFileDataProject, name;
+function _save_project(f::Function, proj::AbstractTomlFileDataProject)
+    p = f(get_cache(proj, false))
+    set_cache(proj, project_toml(p))
+end
+
+function create!(proj::AbstractTomlFileDataProject, name;
         # One of the following required
         source::Union{Nothing,DataSet}=nothing,
         driver::Union{Nothing,AbstractString}=nothing,
@@ -228,28 +235,26 @@ end
 project_name(proj::TomlFileDataProject) = proj.path
 
 function Base.setindex!(proj::TomlFileDataProject, data::DataSet, name::AbstractString)
-    p = get_cache(proj)
-    p[name] = data
-    save_project(proj.path, p)
+    _save_project(proj) do inner_proj
+        inner_proj[name] = data
+        inner_proj
+    end
 end
 
-function delete(proj::TomlFileDataProject, name::AbstractString)
-    # FIXME: Make this safe for concurrent use in-process
-    # (or better, between processes?)
-    p = get_cache(proj)
+function Base.delete!(proj::TomlFileDataProject, name::AbstractString)
+    _save_project(proj) do inner_proj
+        ds = dataset(inner_proj, name)
+        # Assume all datasets which don't have the "linked" property are linked.
+        # This prevents us accidentally deleting data.
+        if get(ds, "linked", true)
+            @info "Linked dataset is preserved on data storage" name
+        else
+            driver = _find_driver(ds)
+            delete_storage(proj, driver, ds)
+        end
 
-    ds = dataset(p, name)
-    # Assume all datasets which don't have the "linked" property are linked.
-    # This prevents us accidentally deleting data.
-    if get(ds, "linked", true)
-        @info "Linked dataset is preserved on data storage" name
-    else
-        driver = _find_driver(ds)
-        delete_storage(proj, driver, ds)
+        Base.delete!(inner_proj, name)
     end
-
-    delete(p, name)
-    save_project(proj.path, p)
 end
 
 #-------------------------------------------------------------------------------

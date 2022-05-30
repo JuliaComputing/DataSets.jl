@@ -250,7 +250,7 @@ end
 
 function Base.setindex!(proj::DataProject, data::DataSet, name::AbstractString)
     if haskey(proj, name) && proj[name] !== data
-        throw(ArgumentError("Cannot replace existing dataset with name \"$name\". Try DataSets.delete() first."))
+        throw(ArgumentError("Cannot replace existing dataset with name \"$name\". Try delete!() first."))
     end
     if isnothing(data_project(data))
         setfield!(data, :project, proj)
@@ -260,8 +260,8 @@ function Base.setindex!(proj::DataProject, data::DataSet, name::AbstractString)
     proj.datasets[name] = data
 end
 
-function delete(proj::DataProject, name::AbstractString)
-    delete!(proj.datasets, name)
+function Base.delete!(proj::DataProject, name::AbstractString)
+    Base.delete!(proj.datasets, name)
 end
 
 #-------------------------------------------------------------------------------
@@ -321,9 +321,9 @@ function Base.show(io::IO, mime::MIME"text/plain", stack::StackedDataProject)
     end
 end
 
-function create(stack::StackedDataProject, name; kws...)
+function create!(stack::StackedDataProject, name; kws...)
     for proj in stack.projects
-        ds = create(proj, name; kws...)
+        ds = create!(proj, name; kws...)
         if !isnothing(ds)
             return ds
         end
@@ -331,10 +331,10 @@ function create(stack::StackedDataProject, name; kws...)
     return nothing
 end
 
-function delete(stack::StackedDataProject, name)
+function Base.delete!(stack::StackedDataProject, name)
     for proj in stack.projects
         if haskey(proj, name)
-            delete(proj, name)
+            Base.delete!(proj, name)
             return
         end
     end
@@ -401,15 +401,21 @@ function config!(name::AbstractString; kws...)
     config!(PROJECT, name; kws...)
 end
 
-function create(name::AbstractString; kws...)
-    ds = create(PROJECT, name; kws...)
+function create!(name::AbstractString; kws...)
+    ds = create!(PROJECT, name; kws...)
     if isnothing(ds)
         error("Could not create dataset in any available data project")
     end
     return ds
 end
 
-function delete(name::AbstractString)
-    delete(PROJECT, name)
+# Version of `delete!` for acting on the global data project.
+#
+# Unfortunately this can't be a method of `Base.delete!`, as that'd be type
+# piracy...
+function delete!(name::AbstractString)
+    Base.delete!(PROJECT, name)
 end
 
+# DataSets.delete! is just Base.delete! in other cases
+delete!(xs...) = Base.delete!(xs...)
