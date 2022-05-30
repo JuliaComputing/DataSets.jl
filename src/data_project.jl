@@ -198,8 +198,8 @@ function Base.show(io::IO, ::MIME"text/plain", project::AbstractDataProject)
     for (i, (name, data)) in enumerate(sorted)
         pad = maxwidth - textwidth(name)
         storagetype = get(data.storage, "type", nothing)
-        icon = storagetype in ("File", "Blob")     ? '📄' :
-               storagetype in ("FileTree", "BlobTree") ? '📁' :
+        icon = is_File_dtype(storagetype)     ? '📄' :
+               is_FileTree_dtype(storagetype) ? '📁' :
                '❓'
         print(io, "  ", icon, ' ', name, ' '^pad, " => ", data.uuid)
         if i < length(sorted)
@@ -321,6 +321,31 @@ function Base.show(io::IO, mime::MIME"text/plain", stack::StackedDataProject)
     end
 end
 
+"""
+    create!(name; [type=..., driver=..., description=..., tags=..., kws...])
+
+Create a dataset named `name` in the global data project.
+
+    create!(proj, name; kws...)
+
+Create a dataset in the given data project. The keyword arguments `kws` are the
+same as the global version.
+
+
+# Examples
+
+To create a `File` named "SomeFile" on the local filesystem,
+
+```
+DataSets.create!("SomeFile", type="File", driver="FileSystem")
+```
+
+To create a `FileTree` named "Namespace/SomeDir" on the local filesystem,
+
+```
+DataSets.create!("Namespace/SomeDir", type="FileTree", driver="FileSystem")
+```
+"""
 function create!(stack::StackedDataProject, name; kws...)
     for proj in stack.projects
         ds = create!(proj, name; kws...)

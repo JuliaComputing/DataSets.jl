@@ -474,6 +474,10 @@ function close_dataset(storage::Union{File,FileTree}, exc=nothing)
     close_dataset(storage.root)
 end
 
+# Utility functions
+is_File_dtype(dtype)     = (dtype == "File"     || dtype == "Blob")
+is_FileTree_dtype(dtype) = (dtype == "FileTree" || dtype == "BlobTree")
+
 #-------------------------------------------------------------------------------
 # Path manipulation
 

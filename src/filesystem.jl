@@ -255,6 +255,40 @@ function local_data_abspath(::Nothing, path)
 end
 
 
+# Return local filesystem absolute path for the dataset, as a string
+function _filesystem_dataset_abspath(dataset)
+    config = dataset.storage
+    if haskey(config, "path")
+        pathstr = config["path"]
+        # Local absolute paths are not portable. Previously these were allowed
+        # in the "path" key, but those are now deprecated in favor of
+        # system-specific path keys unix_path or windows_path
+        if isabspath(pathstr)
+            Base.depwarn("""
+                Absolute paths in Data.toml are deprecated. Instead, use relative
+                paths (separated with `/`) relative to the Data.toml location.""",
+                :connect_filesystem)
+            return pathstr
+        else
+            if '\\' in pathstr && Sys.iswindows()
+                # Heuristic deprecation warning for windows paths in Data.toml
+                Base.depwarn(
+                    "Relative paths in Data.toml should be separated with '/' characters.",
+                    :connect_filesystem)
+                pathstr = join(split(pathstr, '\\'), '/')
+            end
+            relpath = joinpath(split(pathstr, '/')...)
+            return local_data_abspath(data_project(dataset), relpath)
+        end
+    elseif haskey(config, "unix_path") && Sys.isunix()
+        return config["unix_path"]
+    elseif haskey(config, "windows_path") && Sys.iswindows()
+        return config["windows_path"]
+    else
+        error("No \"path\" key found for FileSystem storage driver.")
+    end
+end
+
 """
 ## Metadata spec
 
@@ -284,40 +318,12 @@ For FileTree:
 function open_dataset(driver::FileSystemDriver, dataset, write)
     config = dataset.storage
     # Paths keys can be in three forms documented above;
-    if haskey(config, "path")
-        pathstr = config["path"]
-        # Local absolute paths are not portable. Previously these were allowed
-        # in the "path" key, but those are now deprecated in favor of
-        # system-specific path keys unix_path or windows_path
-        if isabspath(pathstr)
-            Base.depwarn("""
-                Absolute paths in Data.toml are deprecated. Instead, use relative
-                paths (separated with `/`) relative to the Data.toml location.""",
-                :connect_filesystem)
-            path = pathstr
-        else
-            if '\\' in pathstr && Sys.iswindows()
-                # Heuristic deprecation warning for windows paths in Data.toml
-                Base.depwarn(
-                    "Relative paths in Data.toml should be separated with '/' characters.",
-                    :connect_filesystem)
-                pathstr = join(split(pathstr, '\\'), '/')
-            end
-            relpath = joinpath(split(pathstr, '/')...)
-            path = local_data_abspath(data_project(dataset), relpath)
-        end
-    elseif haskey(config, "unix_path") && Sys.isunix()
-        path = config["unix_path"]
-    elseif haskey(config, "windows_path") && Sys.iswindows()
-        path = config["windows_path"]
-    else
-        error("No \"path\" key found for FileSystem storage driver.")
-    end
     type = config["type"]
-    if type in ("File", "Blob")
+    path = _filesystem_dataset_abspath(dataset)
+    if is_File_dtype(type)
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
         storage = File(FileSystemRoot(path; write=write))
-    elseif type in ("FileTree", "BlobTree")
+    elseif is_FileTree_dtype(type)
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
         storage = FileTree(FileSystemRoot(path; write=write))
         path = dataspec_fragment_as_path(dataset)
@@ -333,67 +339,60 @@ end
 function create_storage(proj, driver::FileSystemDriver,
                         name::AbstractString;
                         source::Union{Nothing,DataSet}=nothing,
-                        dtype::Union{Nothing,AbstractString}=nothing,
+                        type::Union{Nothing,AbstractString}=nothing,
                         kws...)
-
     # For other cases here, we're not linking to the original source, but
     # rather making a copy.
     if !isnothing(source)
-        dtype = source.storage["type"]
+        type = source.storage["type"]
     else
-        if isnothing(dtype)
-            throw(ArgumentError("Must provide one of `source` or `dtype`."))
+        if isnothing(type)
+            throw(ArgumentError("Must provide one of `source` or `type`."))
         end
     end
 
     has_slashes = '/' in name
-    local_name = has_slashes ?
-                 joinpath(split(name, '/')) :
-                 name
+    relpath = has_slashes ? joinpath(split(name, '/')) : name
 
-    # project_root_path() will fail
-    data_path = joinpath(project_root_path(proj), local_name)
+    data_path = local_data_abspath(proj, relpath)
     if ispath(data_path)
         error("Local path already exists: $data_path")
     end
 
-    if !(dtype in ("Blob", "BlobTree"))
-        error("Unknown storage type for FileSystemDriver: $dtype")
+    if !(type in ("File", "FileTree"))
+        error("Unknown storage type for FileSystemDriver: $type")
     end
 
     # Create file or directory
     if has_slashes
         mkpath(dirname(data_path))
     end
-    if dtype == "Blob"
+    if is_File_dtype(type)
         touch(data_path)
-    elseif dtype == "BlobTree"
+    elseif is_FileTree_dtype(type)
         mkdir(data_path)
     end
 
     Dict(
         "driver"=>"FileSystem",
-        "type"=>dtype,
-        "path"=>"@__DIR__/$name",
+        "type"=>type,
+        "path"=>relpath,
     )
 end
 
-
-function delete_storage(proj, driver::FileSystemDriver, ds::DataSet)
-    path = ds.storage["path"]
-    type = ds.storage["type"]
-    if type == "Blob"
+function delete_storage(proj, driver::FileSystemDriver, dataset::DataSet)
+    path = _filesystem_dataset_abspath(dataset)
+    type = dataset.storage["type"]
+    if is_File_dtype(type)
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
         rm(path)
-    elseif type == "BlobTree"
+    elseif is_FileTree_dtype(type)
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
         rm(path, recursive=true)
     else
         throw(ArgumentError("DataSet type $type not supported on the filesystem"))
     end
 end
-
-
 
 
 #-------------------------------------------------------------------------------

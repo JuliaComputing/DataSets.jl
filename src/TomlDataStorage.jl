@@ -142,12 +142,12 @@ end
 function open_dataset(driver::TomlDataDriver, dataset, write)
     type = dataset.storage["type"]
     data = get(dataset.storage, "data", nothing)
-    if type in ("File", "Blob")
+    if is_File_dtype(type)
         if !(data isa AbstractString)
             error("TOML data storage requires string data in the \"storage.data\" key")
         end
         return File(TomlDataRoot(dataset, _data_strings_to_buffers(data), write))
-    elseif type in ("FileTree", "BlobTree")
+    elseif is_FileTree_dtype(type)
         if !(data isa AbstractDict)
             error("TOML data storage requires a dictionary in the \"storage.data\" key")
         end

@@ -201,6 +201,7 @@ function create!(proj::AbstractTomlFileDataProject, name;
 
     ds = DataSet(conf)
     proj[ds.name] = ds
+    setfield!(ds, :project, proj)
     return ds
 end
 
@@ -252,16 +253,13 @@ function Base.delete!(proj::TomlFileDataProject, name::AbstractString)
             driver = _find_driver(ds)
             delete_storage(proj, driver, ds)
         end
-
         Base.delete!(inner_proj, name)
+        inner_proj
     end
 end
 
 #-------------------------------------------------------------------------------
 default_driver(proj::AbstractTomlFileDataProject) = FileSystemDriver()
-
-project_root_path(proj) = error("No local path for data project type $(typeof(proj))")
-project_root_path(proj::TomlFileDataProject) = dirname(proj.path)
 
 
 #------------------------------------------------------------------------------
