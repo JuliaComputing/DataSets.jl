@@ -98,8 +98,9 @@ end
     @test DataSets.check_dataset_name("δεδομένα") === nothing
     @test DataSets.check_dataset_name("a/b") === nothing
     @test DataSets.check_dataset_name("a/b/c") === nothing
+    @test DataSets.check_dataset_name("a-b-c-") === nothing
     # Invalid names
-    @test_throws ErrorException("DataSet name \"a?b\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `_` or `/`.") DataSets.check_dataset_name("a?b")
+    @test_throws ErrorException("DataSet name \"a?b\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `-`, `_` or `/`.") DataSets.check_dataset_name("a?b")
     @test_throws ErrorException DataSets.check_dataset_name("1")
     @test_throws ErrorException DataSets.check_dataset_name("a b")
     @test_throws ErrorException DataSets.check_dataset_name("a.b")

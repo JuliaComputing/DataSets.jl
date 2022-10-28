@@ -91,7 +91,7 @@ separated with forward slashes. Examples:
     my_data
     my_data_1
     username/data
-    organization/project/data
+    organization-dataset_name/project/data
 """
 function check_dataset_name(name::AbstractString)
     # DataSet names disallow most punctuation for now, as it may be needed as
@@ -100,13 +100,13 @@ function check_dataset_name(name::AbstractString)
         ^
         [[:alpha:]]
         (?:
-            [[:alnum:]_]      |
+            [-[:alnum:]_]     |
             / (?=[[:alpha:]])
         )*
         $
         "x
     if !occursin(dataset_name_pattern, name)
-        error("DataSet name \"$name\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `_` or `/`.")
+        error("DataSet name \"$name\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `-`, `_` or `/`.")
     end
 end
 
