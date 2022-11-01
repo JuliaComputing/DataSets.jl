@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - master
+      - release-*
     tags: '*'
   pull_request:
 jobs:
@@ -13,6 +14,8 @@ jobs:
     strategy:
       matrix:
         version:
+          - '1.5'
+          - '1.7'
           - '1'
           - 'nightly'
         os:

@@ -1,7 +1,7 @@
 name = "DataSets"
 uuid = "c9661210-8a83-48f0-b833-72e62abce419"
 authors = ["Chris Foster <chris42f@gmail.com> and contributors"]
-version = "0.2.6"
+version = "0.2.7"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
