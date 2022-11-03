@@ -146,7 +146,7 @@ interpreted as follows:
 This simplified version of the code loading rules (`LOAD_PATH`/`DEPOT_PATH``) is
 used as it seems unlikely that we'll want data location to be version-
 dependent in the same way that that code is. Note that any changes to `DEPOT_PATH`
-after `DataSets. has been loaded do not affect `DataSets.PROJECT`.
+after `DataSets` has been loaded do not affect `DataSets.PROJECT`.
 
 Unlike `LOAD_PATH`, `JULIA_DATASETS_PATH` is represented inside the program as
 a `StackedDataProject`, and users can add custom projects by defining their own
