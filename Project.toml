@@ -15,7 +15,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
-AbstractTrees = "0.3, 0.4"
+AbstractTrees = "0.4"
 ReplMaker = "0.2"
 ResourceContexts = "0.1,0.2"
 TOML = "1"
