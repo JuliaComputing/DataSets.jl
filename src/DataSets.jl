@@ -67,18 +67,18 @@ include("storage_drivers.jl")
 #-------------------------------------------------------------------------------
 # Global datasets configuration for current Julia session
 
-function data_project_from_path(path)
+function data_project_from_path(path; depot_paths)
     if path == "@"
         ActiveDataProject()
     elseif path == ""
         # We will not throw an error here because this gets call in __init__, and we
         # do not want to interrupt the loading of the package. Instead, we omit this
         # project.
-        if isempty(DEPOT_PATH)
+        if isempty(depot_paths)
             @warn "Julia depot data project (for an empty dataset path) can not be constructed because DEPOT_PATH is empty."
             return nothing
         end
-        depot = first(DEPOT_PATH)
+        depot = first(depot_paths)
         # Julia is perfectly happy with DEPOT_PATHs that are not absolute, and hence their
         # interpretation changes when the user cd-s around in their session.
         #
@@ -88,8 +88,8 @@ function data_project_from_path(path)
         # path when DataSets gets loaded, so that things would not be affected by the
         # user changing directories, but we also
         if !isabspath(depot)
-            depot = abspath(expanduser(foo))
-            @warn "Julia depot path ($(first(DEPOT_PATH))) not absolute. Fixing data project path relative to current working directory." depot
+            depot = abspath(expanduser(depot))
+            @warn "Julia depot path ($(first(depot_paths))) not absolute. Fixing data project path relative to current working directory." depot
         end
         TomlFileDataProject(joinpath(depot, "datasets", "Data.toml"))
     else
@@ -104,7 +104,7 @@ function data_project_from_path(path)
     end
 end
 
-function create_project_stack(env)
+function create_project_stack(env, depot_paths)
     stack = []
     env_search_path = get(env, "JULIA_DATASETS_PATH", nothing)
     if isnothing(env_search_path)
@@ -114,7 +114,7 @@ function create_project_stack(env)
             split(env_search_path, Sys.iswindows() ? ';' : ':')
     end
     for path in paths
-        project = data_project_from_path(path)
+        project = data_project_from_path(path; depot_paths)
         isnothing(project) && continue
         push!(stack, project)
     end
@@ -167,7 +167,7 @@ function __init__()
     # be unnecessary and can cause problems if those driver modules use
     # Requires-like code loading.
     if !_isprecompiling()
-        global PROJECT = create_project_stack(ENV)
+        global PROJECT = create_project_stack(ENV, DEPOT_PATH)
         for proj in PROJECT.projects
             try
                 add_storage_driver(proj)
