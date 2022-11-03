@@ -139,9 +139,6 @@ Additional projects may be added or removed from the stack with `pushfirst!`,
 """
 PROJECT = StackedDataProject()
 
-# deprecated. TODO: Remove dependency on this from JuliaHub
-_current_project = DataProject()
-
 _isprecompiling() = ccall(:jl_generating_output, Cint, ()) == 1
 
 function __init__()
