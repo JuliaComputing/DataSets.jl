@@ -67,29 +67,44 @@ include("storage_drivers.jl")
 #-------------------------------------------------------------------------------
 # Global datasets configuration for current Julia session
 
-function expand_project_path(path)
+function data_project_from_path(path; depot_paths)
     if path == "@"
-        return path
+        ActiveDataProject()
     elseif path == ""
-        return joinpath(homedir(), ".julia", "datasets", "Data.toml")
+        # We will not throw an error here because this gets call in __init__, and we
+        # do not want to interrupt the loading of the package. Instead, we omit this
+        # project.
+        if isempty(depot_paths)
+            @warn "Julia depot data project (for an empty dataset path) can not be constructed because DEPOT_PATH is empty."
+            return nothing
+        end
+        depot = first(depot_paths)
+        # Julia is perfectly happy with DEPOT_PATHs that are not absolute, and hence their
+        # interpretation changes when the user cd-s around in their session.
+        #
+        #   https://github.com/JuliaLang/julia/issues/44958
+        #
+        # To offer a little bit more reliability here for the user, we absolutize the
+        # path when DataSets gets loaded, so that things would not be affected by the
+        # user changing directories.
+        if !isabspath(depot)
+            depot = abspath(expanduser(depot))
+            @warn "Julia depot path ($(first(depot_paths))) not absolute. Fixing data project path relative to current working directory." depot
+        end
+        TomlFileDataProject(joinpath(depot, "datasets", "Data.toml"))
     else
+        # In other cases, we expect a reasonable absolute (or relative) path from
+        # the user, which can either points directly to a file, unless it is an existing
+        # directory.
         path = abspath(expanduser(path))
         if isdir(path)
             path = joinpath(path, "Data.toml")
         end
-    end
-    path
-end
-
-function data_project_from_path(path)
-    if path == "@"
-        ActiveDataProject()
-    else
-        TomlFileDataProject(expand_project_path(path))
+        TomlFileDataProject(path)
     end
 end
 
-function create_project_stack(env)
+function create_project_stack(env, depot_paths)
     stack = []
     env_search_path = get(env, "JULIA_DATASETS_PATH", nothing)
     if isnothing(env_search_path)
@@ -99,7 +114,8 @@ function create_project_stack(env)
             split(env_search_path, Sys.iswindows() ? ';' : ':')
     end
     for path in paths
-        project = data_project_from_path(path)
+        project = data_project_from_path(path; depot_paths)
+        isnothing(project) && continue
         push!(stack, project)
     end
     StackedDataProject(stack)
@@ -124,11 +140,13 @@ interpreted as follows:
    For directories, the filename "Data.toml" is implicitly appended.
    `expanduser()` is used to expand the user's home directory.
  - As in `DEPOT_PATH`, an *empty* path component means the user's default
-   Julia home directory, `joinpath(homedir(), ".julia", "datasets")`
+   Julia depot (e.g. `~/.julia/datasets`), determined by the first element
+   of `DEPOT_PATH`.
 
-This simplified version of the code loading rules (LOAD_PATH/DEPOT_PATH) is
+This simplified version of the code loading rules (`LOAD_PATH`/`DEPOT_PATH``) is
 used as it seems unlikely that we'll want data location to be version-
-dependent in the same way that that code is.
+dependent in the same way that that code is. Note that any changes to `DEPOT_PATH`
+after `DataSets` has been loaded do not affect `DataSets.PROJECT`.
 
 Unlike `LOAD_PATH`, `JULIA_DATASETS_PATH` is represented inside the program as
 a `StackedDataProject`, and users can add custom projects by defining their own
@@ -146,7 +164,7 @@ function __init__()
     # be unnecessary and can cause problems if those driver modules use
     # Requires-like code loading.
     if !_isprecompiling()
-        global PROJECT = create_project_stack(ENV)
+        global PROJECT = create_project_stack(ENV, DEPOT_PATH)
         for proj in PROJECT.projects
             try
                 add_storage_driver(proj)

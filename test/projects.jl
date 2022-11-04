@@ -114,7 +114,7 @@ end
                            joinpath(@__DIR__, "Data.toml"),
                            ""], paths_sep)
     fake_env = Dict("JULIA_DATASETS_PATH"=>datasets_paths)
-    proj = DataSets.create_project_stack(fake_env)
+    proj = DataSets.create_project_stack(fake_env, [joinpath(homedir(), ".julia"), joinpath("root", "julia")])
     @test proj.projects[1] isa ActiveDataProject
 
     @test proj.projects[2] isa TomlFileDataProject
@@ -129,6 +129,14 @@ end
     DataSets.__init__()
     @test DataSets.PROJECT.projects[1] isa TomlFileDataProject
     @test project_name(DataSets.PROJECT.projects[1]) == joinpath(@__DIR__, "Data.toml")
+
+    # Test a few edge cases too:
+    @test_logs (
+        :warn, "Julia depot data project (for an empty dataset path) can not be constructed because DEPOT_PATH is empty."
+    ) DataSets.create_project_stack(Dict("JULIA_DATASETS_PATH"=>"foo$(paths_sep)"), [])
+    @test_logs (
+        :warn, "Julia depot path (relative/depot/path) not absolute. Fixing data project path relative to current working directory."
+    ) DataSets.create_project_stack(Dict("JULIA_DATASETS_PATH"=>"$(paths_sep)/foo"), ["relative/depot/path"])
 end
 
 @testset "config!() metadata update" begin

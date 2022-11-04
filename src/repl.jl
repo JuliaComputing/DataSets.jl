@@ -212,7 +212,7 @@ function parse_data_repl_cmd(cmdstr)
         if subcmd == "push"
             path = popfirst!(tokens)
             return quote
-                proj = $DataSets.data_project_from_path($path)
+                proj = $DataSets.data_project_from_path($path; depot_paths=DEPOT_PATH)
                 stack = $DataSets.PROJECT
                 pushfirst!(stack, proj)
                 stack
