@@ -86,7 +86,7 @@ function data_project_from_path(path; depot_paths)
         #
         # To offer a little bit more reliability here for the user, we absolutize the
         # path when DataSets gets loaded, so that things would not be affected by the
-        # user changing directories, but we also
+        # user changing directories.
         if !isabspath(depot)
             depot = abspath(expanduser(depot))
             @warn "Julia depot path ($(first(depot_paths))) not absolute. Fixing data project path relative to current working directory." depot
