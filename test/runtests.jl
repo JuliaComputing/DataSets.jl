@@ -78,20 +78,20 @@ end
 
 #-------------------------------------------------------------------------------
 @testset "Data set names" begin
-    # Valid names
-    @test DataSets.is_valid_dataset_name("a_b")
-    @test DataSets.is_valid_dataset_name("a-b")
-    @test DataSets.is_valid_dataset_name("a1")
-    @test DataSets.is_valid_dataset_name("δεδομένα")
-    @test DataSets.is_valid_dataset_name("a/b")
-    @test DataSets.is_valid_dataset_name("a/b/c")
-    # Invalid names
-    @test !DataSets.is_valid_dataset_name("1")
-    @test !DataSets.is_valid_dataset_name("a b")
-    @test !DataSets.is_valid_dataset_name("a.b")
-    @test !DataSets.is_valid_dataset_name("a/b/")
-    @test !DataSets.is_valid_dataset_name("a//b")
-    @test !DataSets.is_valid_dataset_name("/a/b")
+    @testset "Valid name: $name" for name in (
+        "a_b", "a-b", "a1", "δεδομένα", "a/b", "a/b/c", "a-", "b_",
+    )
+        @test DataSets.is_valid_dataset_name(name)
+        @test DataSets._split_dataspec(name) == (name, nothing, nothing)
+    end
+
+    @testset "Invalid name: $name" for name in (
+        "1", "a b", "a.b", "a/b/", "a//b", "/a/b", "a/-", "a/1", "a/ _/b"
+    )
+        @test !DataSets.is_valid_dataset_name(name)
+        @test DataSets._split_dataspec(name) == (nothing, nothing, nothing)
+    end
+
     # Error message for invalid names
     @test_throws ErrorException("DataSet name \"a?b\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `_` or `/`.") DataSets.check_dataset_name("a?b")
 
@@ -107,6 +107,21 @@ end
 end
 
 @testset "URL-like dataspec parsing" begin
+    # Valid dataspecs
+    DataSets._split_dataspec("foo?x=1#f") == ("foo", ["x" => "1"], "f")
+    DataSets._split_dataspec("foo#f") == ("foo", nothing, "f")
+    DataSets._split_dataspec("foo?x=1") == ("foo", ["x" => "1"], nothing)
+    DataSets._split_dataspec("foo?x=1") == ("foo", ["x" => "1"], nothing)
+    # Invalid dataspecs
+    DataSets._split_dataspec("foo ?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo\n?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo\nbar?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec(" foo?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("1?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo-?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo #f") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("@?x=1") == (nothing, nothing, nothing)
+
     proj = DataSets.load_project("Data.toml")
 
     @test !haskey(dataset(proj, "a_text_file"), "dataspec")

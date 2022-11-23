@@ -107,16 +107,20 @@ function _unescapeuri(str)
     return String(take!(out))
 end
 
+# Parse as a suffix of URI syntax
+# name/of/dataset?param1=value1&param2=value2#fragment
+const DATASET_SPEC_REGEX = Regex(
+    """
+    ^
+    ($(DATASET_NAME_REGEX_STRING))
+    (?:\\?([^#]*))? # query    - a=b&c=d
+    (?:\\#(.*))?    # fragment - ...
+    \$
+    """,
+    "x",
+)
 function _split_dataspec(spec::AbstractString)
-    # Parse as a suffix of URI syntax
-    # name/of/dataset?param1=value1&param2=value2#fragment
-    m = match(r"
-        ^
-        ((?:[[:alpha:]][[:alnum:]_]*/?)+)  # name     - a/b/c
-        (?:\?([^#]*))?                     # query    - a=b&c=d
-        (?:\#(.*))?                        # fragment - ...
-        $"x,
-        spec)
+    m = match(DATASET_SPEC_REGEX, spec)
     if isnothing(m)
         return nothing, nothing, nothing
     end
