@@ -51,20 +51,17 @@ separated with forward slashes. Examples:
     username/data
     organization/project/data
 """
-function is_valid_dataset_name(name::AbstractString)
-    # DataSet names disallow most punctuation for now, as it may be needed as
-    # delimiters in data-related syntax (eg, for the data REPL).
-    dataset_name_pattern = r"
-        ^
-        [[:alpha:]]
-        (?:
-            [-[:alnum:]_]     |
-            / (?=[[:alpha:]])
-        )*
-        $
-        "x
-    return occursin(dataset_name_pattern, name)
-end
+is_valid_dataset_name(name::AbstractString) = occursin(DATASET_NAME_REGEX, name)
+# DataSet names disallow most punctuation for now, as it may be needed as
+# delimiters in data-related syntax (eg, for the data REPL).
+const DATASET_NAME_REGEX_STRING = raw"""
+[[:alpha:]]
+(?:
+    [-[:alnum:]_]     |
+    / (?=[[:alpha:]])
+)*
+"""
+const DATASET_NAME_REGEX = Regex("^\n$(DATASET_NAME_REGEX_STRING)\n\$", "x")
 
 function make_valid_dataset_name(name)
     if !is_valid_dataset_name(name)
@@ -191,4 +188,3 @@ function Base.open(as_type, dataset::DataSet)
         @! ResourceContexts.detach_context_cleanup(result)
     end
 end
-
