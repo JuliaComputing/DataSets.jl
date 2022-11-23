@@ -78,20 +78,16 @@ end
 
 #-------------------------------------------------------------------------------
 @testset "Data set names" begin
-    # Valid names
-    @test DataSets.is_valid_dataset_name("a_b")
-    @test DataSets.is_valid_dataset_name("a-b")
-    @test DataSets.is_valid_dataset_name("a1")
-    @test DataSets.is_valid_dataset_name("δεδομένα")
-    @test DataSets.is_valid_dataset_name("a/b")
-    @test DataSets.is_valid_dataset_name("a/b/c")
-    # Invalid names
-    @test !DataSets.is_valid_dataset_name("1")
-    @test !DataSets.is_valid_dataset_name("a b")
-    @test !DataSets.is_valid_dataset_name("a.b")
-    @test !DataSets.is_valid_dataset_name("a/b/")
-    @test !DataSets.is_valid_dataset_name("a//b")
-    @test !DataSets.is_valid_dataset_name("/a/b")
+    @testset "Valid name: $name" for name in ("a_b", "a-b", "a1", "δεδομένα", "a/b", "a/b/c")
+        @test DataSets.is_valid_dataset_name(name)
+        @test DataSets._split_dataspec(name) == (name, nothing, nothing)
+    end
+
+    @testset "Invalid name: $name" for name in ("1", "a b", "a.b", "a/b/", "a//b", "/a/b")
+        @test !DataSets.is_valid_dataset_name(name)
+        @test DataSets._split_dataspec(name) == (nothing, nothing, nothing)
+    end
+
     # Error message for invalid names
     @test_throws ErrorException("DataSet name \"a?b\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `_` or `/`.") DataSets.check_dataset_name("a?b")
 
