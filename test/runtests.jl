@@ -78,12 +78,16 @@ end
 
 #-------------------------------------------------------------------------------
 @testset "Data set names" begin
-    @testset "Valid name: $name" for name in ("a_b", "a-b", "a1", "δεδομένα", "a/b", "a/b/c")
+    @testset "Valid name: $name" for name in (
+        "a_b", "a-b", "a1", "δεδομένα", "a/b", "a/b/c", "a-", "b_",
+    )
         @test DataSets.is_valid_dataset_name(name)
         @test DataSets._split_dataspec(name) == (name, nothing, nothing)
     end
 
-    @testset "Invalid name: $name" for name in ("1", "a b", "a.b", "a/b/", "a//b", "/a/b")
+    @testset "Invalid name: $name" for name in (
+        "1", "a b", "a.b", "a/b/", "a//b", "/a/b", "a/-", "a/1", "a/ _/b"
+    )
         @test !DataSets.is_valid_dataset_name(name)
         @test DataSets._split_dataspec(name) == (nothing, nothing, nothing)
     end
@@ -103,6 +107,21 @@ end
 end
 
 @testset "URL-like dataspec parsing" begin
+    # Valid dataspecs
+    DataSets._split_dataspec("foo?x=1#f") == ("foo", ["x" => "1"], "f")
+    DataSets._split_dataspec("foo#f") == ("foo", nothing, "f")
+    DataSets._split_dataspec("foo?x=1") == ("foo", ["x" => "1"], nothing)
+    DataSets._split_dataspec("foo?x=1") == ("foo", ["x" => "1"], nothing)
+    # Invalid dataspecs
+    DataSets._split_dataspec("foo ?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo\n?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo\nbar?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec(" foo?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("1?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo-?x=1") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("foo #f") == (nothing, nothing, nothing)
+    DataSets._split_dataspec("@?x=1") == (nothing, nothing, nothing)
+
     proj = DataSets.load_project("Data.toml")
 
     @test !haskey(dataset(proj, "a_text_file"), "dataspec")
