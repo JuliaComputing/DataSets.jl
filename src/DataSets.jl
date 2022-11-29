@@ -94,21 +94,20 @@ separated with forward slashes. Examples:
     organization-dataset_name/project/data
 """
 function check_dataset_name(name::AbstractString)
-    # DataSet names disallow most punctuation for now, as it may be needed as
-    # delimiters in data-related syntax (eg, for the data REPL).
-    dataset_name_pattern = r"
-        ^
-        [[:alpha:]]
-        (?:
-            [-[:alnum:]_]     |
-            / (?=[[:alpha:]])
-        )*
-        $
-        "x
-    if !occursin(dataset_name_pattern, name)
+    if !occursin(DATASET_NAME_REGEX, name)
         error("DataSet name \"$name\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `-`, `_` or `/`.")
     end
 end
+# DataSet names disallow most punctuation for now, as it may be needed as
+# delimiters in data-related syntax (eg, for the data REPL).
+const DATASET_NAME_REGEX_STRING = raw"""
+[[:alpha:]]
+(?:
+    [-[:alnum:]_]     |
+    / (?=[[:alpha:]])
+)*
+"""
+const DATASET_NAME_REGEX = Regex("^\n$(DATASET_NAME_REGEX_STRING)\n\$", "x")
 
 # Hacky thing until we figure out which fields DataSet should actually have.
 function Base.getproperty(d::DataSet, name::Symbol)
@@ -254,16 +253,22 @@ function _unescapeuri(str)
     return String(take!(out))
 end
 
+# Parse as a suffix of URI syntax
+# name/of/dataset?param1=value1&param2=value2#fragment
+const DATASET_SPEC_REGEX = Regex(
+    """
+    ^
+    ($(DATASET_NAME_REGEX_STRING))
+    (?:\\?([^#]*))? # query    - a=b&c=d
+    (?:\\#(.*))?    # fragment - ...
+    \$
+    """,
+    "x",
+)
 function _split_dataspec(spec::AbstractString)
     # Parse as a suffix of URI syntax
     # name/of/dataset?param1=value1&param2=value2#fragment
-    m = match(r"
-        ^
-        ((?:[[:alpha:]][[:alnum:]_]*/?)+)  # name     - a/b/c
-        (?:\?([^#]*))?                     # query    - a=b&c=d
-        (?:\#(.*))?                        # fragment - ...
-        $"x,
-        spec)
+    m = match(DATASET_SPEC_REGEX, spec)
     if isnothing(m)
         return nothing, nothing, nothing
     end
