@@ -1,0 +1,35 @@
+# Version of the data TOML format.
+data_config_version=1
+
+[[datasets]]
+# Some alphanumeric name (can include spaces and underscores)
+name="a_text_file"
+# Optional description
+description="A text file containing the standard greeting"
+# A unique ID. Generate with UUIDs.uuid4()
+uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
+
+    # Storage location
+    [datasets.storage]
+    # The name of the storage driver.
+    driver="FileSystem"
+    # Data stored in FileSystem is either File (a file) or FileTree (a directory/folder)
+    type="File"
+    # Path with posix `/` separators.
+    # Relative paths are relative to the location of Data.toml
+    path="data/file.txt"
+
+# A second example
+[[datasets]]
+name="a_tree_example"
+description="A very simple directory tree"
+uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
+
+    [datasets.storage]
+    driver="FileSystem"
+    type="FileTree"
+    path="data/csvset"
+
+# Further datasets can be added as desired
+# [[datasets]]
+# ...
