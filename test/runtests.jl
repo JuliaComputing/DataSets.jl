@@ -7,7 +7,14 @@ using ResourceContexts
 
 using DataSets: FileSystemRoot
 
-#-------------------------------------------------------------------------------
+@testset "register_post_init_callback" begin
+    init_was_called = Ref(false)
+    DataSets.register_post_init_callback() do
+        init_was_called[] = true
+    end
+    @test init_was_called[]
+end
+
 @testset "DataSet config" begin
     proj = DataSets.load_project("Data.toml")
 
