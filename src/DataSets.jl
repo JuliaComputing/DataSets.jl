@@ -669,6 +669,56 @@ function __init__()
                     =# project=proj exception=(exc,catch_backtrace())
             end
         end
+        # Call any post-__init__() callbacks that were registered before __init__() was called,
+        # or had chance to finish.
+        lock(_PROJECT_INIT_LOCK) do
+            _PROJECT_INITIALIZED[] = true
+            for f in _PROJECT_INIT_CALLBACKS
+                _invoke_init_cb(f)
+            end
+            # No need to keep the callbacks around, and maybe the GC can free some memory.
+            empty!(_PROJECT_INIT_CALLBACKS)
+        end
+    end
+end
+
+# The register_post_init_callback() can be used to add a callback that will get called
+# when DataSets.__init__() has run. Note: if f() throws an error, it does not cause a crash.
+#
+# This is useful for sysimages where the module is already be loaded (in Base.loaded_modules),
+# but __init__() has not been called yet. In particular, this means that other packages' __init__
+# functions can be sure that when they call initialization code that affects DataSets (in particular,
+# DataSets.PROJECT), then that code runs after __init__() has run.
+#
+# In the non-sysimage case, DataSets.__init__() would normally have already been called when
+# once register_post_init_callback() becomes available, and so in those situations, the callback
+# gets called immediately. However, in a system image, DataSets may have to queue up (FIFO) the
+# callback functions and wait until DataSets.__init__() has finished.
+#
+# Since the __init__() functions in sysimages can run in parallel, we use a lock just in case,
+# to make sure that two parallel calls would succeed.
+const _PROJECT_INIT_LOCK = ReentrantLock()
+const _PROJECT_INITIALIZED = Ref{Bool}(false)
+const _PROJECT_INIT_CALLBACKS = Base.Callable[]
+function register_post_init_callback(f::Base.Callable)
+    invoke = lock(_PROJECT_INIT_LOCK) do
+        if _PROJECT_INITIALIZED[]
+            return true
+        end
+        push!(_PROJECT_INIT_CALLBACKS, f)
+        return false
+    end
+    # We'll invoke outside of the lock, so that a long-running f() call
+    # wouldn't block other calls to register_post_init_callback()
+    invoke && _invoke_init_cb(f)
+    return nothing
+end
+
+function _invoke_init_cb(f::Base.Callable)
+    try
+        Base.invokelatest(f)
+    catch e
+        @error "Failed to run init callback: $f" exception = (e, catch_backtrace())
     end
 end
 
