@@ -3,7 +3,7 @@
     proj = DataSets.load_project("Data.toml")
 
     blob_ds = dataset(proj, "embedded_blob")
-    @test open(blob_ds) isa File
+    @test open(blob_ds) isa Blob
     @test open(String, blob_ds) == "\0\0\0\0\0\0E@"
     @test read(open(blob_ds), Float64) === 42.0
 
@@ -15,7 +15,7 @@
         @test @!(open(String, blob_ds)) == "\0\0\0\0\0\0E@"
 
         blob = @! open(blob_ds)
-        @test blob isa File
+        @test blob isa Blob
         @test @!(open(String, blob)) == "\0\0\0\0\0\0E@"
 
         @test read(blob, Float64) === 42.0
@@ -23,12 +23,12 @@
     end
 
     tree_ds = dataset(proj, "embedded_tree")
-    @test open(tree_ds) isa FileTree
+    @test open(tree_ds) isa BlobTree
     @test open(String, open(tree_ds)[path"d01/a.txt"]) == "1 a content"
     @test open(String, open(tree_ds)[path"d02/b.txt"]) == "2 b content"
     @context begin
         tree = @! open(tree_ds)
-        @test tree isa FileTree
+        @test tree isa BlobTree
 
         @test isdir(tree)
         @test !isfile(tree)

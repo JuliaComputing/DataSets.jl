@@ -1,45 +1,21 @@
-"""
-Root storage object for trees which are rooted in the file system (in git
-terminology, there exists a "working copy")
-"""
-mutable struct FileSystemRoot
-    path::String
-    write::Bool
-    cleanup::Bool
-end
-
-function FileSystemRoot(path::AbstractString; write=false, cleanup=false)
-    path = abspath(path)
-    root = FileSystemRoot(path, write, cleanup)
-    if cleanup
-        finalizer(root) do r
-            if r.cleanup
-                rm(r.path, recursive=true, force=true)
-            end
-        end
-    end
-    return root
-end
+#
+# Storage Driver implementation for trees which are rooted in the file system
+# (in git terminology, there exists a "working copy")
+#
+abstract type AbstractFileSystemRoot end
 
 # These functions sys_abspath and sys_joinpath generate/joins OS-specific
 # _local filesystem paths_ out of logical paths. They should be defined only
 # for trees which are rooted in the actual filesystem.
-sys_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
-
-sys_abspath(root::FileSystemRoot) = root.path
-
-function sys_abspath(root::FileSystemRoot, path::RelPath)
+function sys_abspath(root::AbstractFileSystemRoot, path::RelPath)
     rootpath = sys_abspath(root)
     return isempty(path.components) ? rootpath : joinpath(rootpath, sys_joinpath(path))
 end
 
+sys_joinpath(path::RelPath) = isempty(path.components) ? "" : joinpath(path.components...)
 sys_abspath(path::AbsPath) = sys_abspath(path.root, path.path)
-sys_abspath(tree::FileTree) = sys_abspath(tree.root, tree.path)
-sys_abspath(file::File) = sys_abspath(file.root, file.path)
-
-iswriteable(root::FileSystemRoot) = root.write
-
-
+sys_abspath(tree::BlobTree) = sys_abspath(tree.root, tree.path)
+sys_abspath(file::Blob) = sys_abspath(file.root, file.path)
 
 #--------------------------------------------------
 # Storage data interface for trees
@@ -49,50 +25,42 @@ iswriteable(root::FileSystemRoot) = root.write
 ## 1. Query
 
 # TODO: would it be better to express the following dispatch in terms of
-# AbsPath{<:FileSystemRoot} rather than usin double dispatch?
+# AbsPath{<:AbstractFileSystemRoot} rather than usin double dispatch?
 
-Base.isdir(root::FileSystemRoot, path::RelPath) = isdir(sys_abspath(root, path))
-Base.isfile(root::FileSystemRoot, path::RelPath) = isfile(sys_abspath(root, path))
-Base.ispath(root::FileSystemRoot, path::RelPath) = ispath(sys_abspath(root, path))
-Base.filesize(root::FileSystemRoot, path::RelPath) = filesize(sys_abspath(root, path))
+Base.isdir(root::AbstractFileSystemRoot, path::RelPath) = isdir(sys_abspath(root, path))
+Base.isfile(root::AbstractFileSystemRoot, path::RelPath) = isfile(sys_abspath(root, path))
+Base.ispath(root::AbstractFileSystemRoot, path::RelPath) = ispath(sys_abspath(root, path))
 
-Base.summary(io::IO, root::FileSystemRoot) = print(io, sys_abspath(root))
+Base.summary(io::IO, root::AbstractFileSystemRoot) = print(io, sys_abspath(root))
 
-Base.readdir(root::FileSystemRoot, path::RelPath) = readdir(sys_abspath(root, path))
+Base.readdir(root::AbstractFileSystemRoot, path::RelPath) = readdir(sys_abspath(root, path))
 
 ## 2. Mutation
 #
 # TODO: Likely requires rework!
 
-function Base.mkdir(root::FileSystemRoot, path::RelPath; kws...)
+function Base.mkdir(root::AbstractFileSystemRoot, path::RelPath; kws...)
     if !iswriteable(root)
-        error("Cannot make directory in read-only tree")
+        error("Cannot make directory in read-only tree root at $(sys_abspath(p.root))")
     end
     mkdir(sys_abspath(root, path), args...)
-    return FileTree(root, path)
+    return BlobTree(root, path)
 end
 
-function Base.rm(root::FileSystemRoot, path::RelPath; kws...)
+function Base.rm(root::AbstractFileSystemRoot, path::RelPath; kws...)
     rm(sys_abspath(root,path); kws...)
 end
 
-function Base.delete!(root::FileSystemRoot, path::RelPath)
-    if !iswriteable(root)
-        error("Cannot delete from read-only tree $root")
-    end
-    rm(sys_abspath(root, path); recursive=true)
-end
-
 #--------------------------------------------------
-# Storage data interface for File
+# Storage data interface for Blob
 
 # TODO: Make this the generic implementation for AbstractDataStorage
 function Base.open(f::Function, as_type::Type{IO},
-                   root::FileSystemRoot, path; kws...)
+                   root::AbstractFileSystemRoot, path; kws...)
     @context f(@! open(as_type, root, path; kws...))
 end
 
-@! function Base.open(::Type{IO}, root::FileSystemRoot, path;
+@! function Base.open(::Type{IO}, root::AbstractFileSystemRoot, path;
                       write=false, read=!write, kws...)
     if !iswriteable(root) && write
         error("Error writing file at read-only path $path")
@@ -100,64 +68,130 @@ end
     @! open(sys_abspath(root, path); read=read, write=write, kws...)
 end
 
-Base.read(root::FileSystemRoot, path::RelPath, ::Type{T}) where {T} =
+Base.read(root::AbstractFileSystemRoot, path::RelPath, ::Type{T}) where {T} =
     read(sys_abspath(root, path), T)
-Base.read(root::FileSystemRoot, path::RelPath) =
+Base.read(root::AbstractFileSystemRoot, path::RelPath) =
     read(sys_abspath(root, path))
 
+#--------------------------------------------------
+"""
+
+## Metadata spec
+
+For Blob:
+```
+    [datasets.storage]
+    driver="FileSystem"
+    type="Blob"
+    path=\$(path_to_file)
+```
+
+For BlobTree:
+```
+    [datasets.storage]
+    driver="FileSystem"
+    type="BlobTree"
+    path=\$(path_to_directory)
+```
+"""
+struct FileSystemRoot <: AbstractFileSystemRoot
+    path::String
+    read::Bool
+    write::Bool
+end
+
+function FileSystemRoot(path::AbstractString; write=false, read=true)
+    path = abspath(path)
+    FileSystemRoot(path, read, write)
+end
+
+iswriteable(root::FileSystemRoot) = root.write
+
+sys_abspath(root::FileSystemRoot) = root.path
+
+function Base.abspath(relpath::RelPath)
+    Base.depwarn("""
+        `abspath(::RelPath)` defaults to using `pwd()` as the root of the path
+        but this leads to fragile code so will be removed in the future""",
+        :abspath)
+    AbsPath(FileSystemRoot(pwd(); write=true, read=true), relpath)
+end
+
 #-------------------------------------------------------------------------------
-# Mutation via newdir/newfile
-_temp_root(path) = FileSystemRoot(path, write=true, cleanup=true)
+# Infrastructure for a somewhat more functional interface for creating file
+# trees than the fully mutable version we usually use.
+
+mutable struct TempFilesystemRoot <: AbstractFileSystemRoot
+    path::Union{Nothing,String}
+    function TempFilesystemRoot(path)
+        root = new(path)
+        finalizer(root) do r
+            if !isnothing(r.path)
+                rm(r.path, recursive=true, force=true)
+            end
+        end
+        return root
+    end
+end
+
+function Base.readdir(root::TempFilesystemRoot, path::RelPath)
+    return isnothing(root.path) ? [] : readdir(sys_abspath(root, path))
+end
+
+iswriteable(root::TempFilesystemRoot) = true
+sys_abspath(root::TempFilesystemRoot) = root.path
 
 """
     newdir()
 
-Create a new `FileTree` on the local temporary directory. If not moved to a
-permanent location (for example, with `some_tree["name"] = newdir()`) the
-temporary tree will be cleaned up during garbage collection.
+Create a new temporary `BlobTree` which can have files assigned into it and may
+be assigned to a permanent location in a persistent `BlobTree`. If not assigned
+to a permanent location, the temporary tree is cleaned up during garbage
+collection.
 """
-function newdir()
+function newdir(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
     # cleanup=false: we manage our own cleanup via the finalizer
-    path = mktempdir(cleanup=false)
-    return FileTree(FileSystemRoot(path, write=true, cleanup=true))
+    path = mktempdir(sys_abspath(ctx), cleanup=false)
+    return BlobTree(TempFilesystemRoot(path))
 end
+newdir(ctx::BlobTree) = newdir(ctx.root)
 
-function newdir(root::FileSystemRoot, path::RelPath; overwrite=false)
-    p = sys_abspath(root, path)
-    if overwrite
-        rm(p, force=true, recursive=true)
-    end
-    mkpath(p)
+function newfile(ctx::AbstractFileSystemRoot=FileSystemRoot(tempdir(), write=true))
+    path, io = mktemp(sys_abspath(ctx), cleanup=false)
+    close(io)
+    return Blob(TempFilesystemRoot(path))
 end
+newfile(ctx::BlobTree) = newfile(ctx.root)
 
-function newfile(func=nothing)
-    path, io = mktemp(cleanup=false)
-    if func !== nothing
-        try
-            func(io)
-        catch
-            rm(path)
-            rethrow()
-        finally
-            close(io)
-        end
-    else
+"""
+    newfile(func)
+    newfile(func, ctx)
+
+Create a new temporary `Blob` object which may be later assigned to a permanent
+location in a `BlobTree`. If not assigned to a permanent location, the
+temporary file is cleaned up during garbage collection.
+
+# Example
+
+```
+tree[path"some/demo/path.txt"] = newfile() do io
+    println(io, "Hi there!")
+end
+```
+"""
+function newfile(f::Function, ctx=FileSystemRoot(tempdir(), write=true))
+    path, io = mktemp(sys_abspath(ctx), cleanup=false)
+    try
+        f(io)
+    catch
+        rm(path)
+        rethrow()
+    finally
         close(io)
     end
-    return File(_temp_root(path))
+    return Blob(TempFilesystemRoot(path))
 end
 
-function newfile(f::Function, root::FileSystemRoot, path::RelPath; kws...)
-    p = sys_abspath(root, path)
-    mkpath(dirname(p))
-    open(f, p, write=true)
-end
-
-function newfile(root::FileSystemRoot, path::RelPath; kws...)
-    newfile(io->nothing, root, path; kws...)
-end
-
-#-------------------------------------------------------------------------------
 # Move srcpath to destpath, making all attempts to preserve the original
 # content of `destpath` if anything goes wrong. We assume that `srcpath` is
 # temporary content which doesn't need to be protected.
@@ -202,117 +236,50 @@ function mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
     end
 end
 
-function Base.setindex!(tree::FileTree{FileSystemRoot},
-                        tmpdata::Union{File{FileSystemRoot},FileTree{FileSystemRoot}},
-                        path::AbstractString)
+function Base.setindex!(tree::BlobTree{<:AbstractFileSystemRoot},
+                        tmpdata::Union{Blob{TempFilesystemRoot},BlobTree{TempFilesystemRoot}},
+                        name::AbstractString)
     if !iswriteable(tree.root)
         error("Attempt to move to a read-only tree $tree")
     end
-    if !tmpdata.root.cleanup
+    if isnothing(tmpdata.root.path)
         type = isdir(tmpdata) ? "directory" : "file"
-        error("Attempted to move $type which is already rooted in $(tmpdata.root)")
+        error("Attempted to root a temporary $type which has already been moved to $(tree.path)/$name ")
     end
     if !isempty(tree.path)
         # Eh, the number of ways the user can misuse this isn't really funny :-/
         error("Temporary trees must be moved in full. The tree had non-empty path $(tree.path)")
     end
-    destpath = sys_abspath(joinpath(tree, RelPath(path)))
+    destpath = sys_abspath(joinpath(tree, name))
     srcpath = sys_abspath(tmpdata)
     tempdir_parent = sys_abspath(tree)
-    mkpath(dirname(destpath))
     mv_force_with_dest_rollback(srcpath, destpath, tempdir_parent)
-    # Transfer ownership of the data to `tree`.
-    tmpdata.root.cleanup = false
-    tmpdata.root.path = destpath
+    # Transfer ownership of the data to `tree`. This is ugly to be sure, as it
+    # leaves `tmpdata` empty! However, we'll have to live with this wart unless
+    # we want to be duplicating large amounts of data on disk.
+    tmpdata.root.path = nothing
     return tree
 end
 
+# It's interesting to read about the linux VFS interface in regards to how the
+# OS actually represents these things. For example
+# https://stackoverflow.com/questions/36144807/why-does-linux-use-getdents-on-directories-instead-of-read
+
+
+
 
 #--------------------------------------------------
-# FileSystem storage driver
 
-"""
-    local_data_abspath(project, relpath)
-
-Return the absolute path of data on disk where `relpath` is relative to
-`project`.
-
-This function must be implemented for any `AbstractDataProject` subtype which
-intends to support the `FileSystem` data driver.
-"""
-function local_data_abspath
-end
-
-
-function local_data_abspath(::Nothing, path)
-    error("Path must be absolute for DataSets without parent data projects")
-end
-
-
-"""
-## Metadata spec
-
-For File:
-```
-    [datasets.storage]
-    driver="FileSystem"
-    type="File"
-    \$path_key=\$(path_string)
-```
-
-For FileTree:
-```
-    [datasets.storage]
-    driver="FileSystem"
-    type="FileTree"
-    \$path_key=\$(path_string)
-```
-
-`path_key` should be one of the following forms:
-```
-    path=\$(relative_slash_separated_path_to_file)
-    unix_path=\$(absolute_unix_path_to_file)
-    windows_path=\$(absolute_windows_path_to_file)
-```
-"""
+# Filesystem storage driver
 function connect_filesystem(f, config, dataset)
-    # Paths keys can be in three forms documented above;
-    if haskey(config, "path")
-        pathstr = config["path"]
-        # Local absolute paths are not portable. Previously these were allowed
-        # in the "path" key, but those are now deprecated in favor of
-        # system-specific path keys unix_path or windows_path
-        if isabspath(pathstr)
-            Base.depwarn("""
-                Absolute paths in Data.toml are deprecated. Instead, use relative
-                paths (separated with `/`) relative to the Data.toml location.""",
-                :connect_filesystem)
-            path = pathstr
-        else
-            if '\\' in pathstr && Sys.iswindows()
-                # Heuristic deprecation warning for windows paths in Data.toml
-                Base.depwarn(
-                    "Relative paths in Data.toml should be separated with '/' characters.",
-                    :connect_filesystem)
-                pathstr = join(split(pathstr, '\\'), '/')
-            end
-            relpath = joinpath(split(pathstr, '/')...)
-            path = local_data_abspath(data_project(dataset), relpath)
-        end
-    elseif haskey(config, "unix_path") && Sys.isunix()
-        path = config["unix_path"]
-    elseif haskey(config, "windows_path") && Sys.iswindows()
-        path = config["windows_path"]
-    else
-        error("No \"path\" key found for FileSystem storage driver.")
-    end
+    path = config["path"]
     type = config["type"]
-    if type in ("File", "Blob")
+    if type == "Blob"
         isfile(path) || throw(ArgumentError("$(repr(path)) should be a file"))
-        storage = File(FileSystemRoot(path))
-    elseif type in ("FileTree", "BlobTree")
+        storage = Blob(FileSystemRoot(path))
+    elseif type == "BlobTree"
         isdir(path)  || throw(ArgumentError("$(repr(path)) should be a directory"))
-        storage = FileTree(FileSystemRoot(path))
+        storage = BlobTree(FileSystemRoot(path))
         path = dataspec_fragment_as_path(dataset)
         if !isnothing(path)
             storage = storage[path]
@@ -323,53 +290,4 @@ function connect_filesystem(f, config, dataset)
     f(storage)
 end
 add_storage_driver("FileSystem"=>connect_filesystem)
-
-
-
-#-------------------------------------------------------------------------------
-# Deprecations
-function Base.abspath(relpath::RelPath)
-    Base.depwarn("""
-        `abspath(::RelPath)` defaults to using `pwd()` as the root of the path
-        but this leads to fragile code so will be removed in the future""",
-        :abspath)
-    AbsPath(FileSystemRoot(pwd(); write=true), relpath)
-end
-
-# Deprecated newdir() and newfile() variants
-function newdir(ctx::FileSystemRoot)
-    Base.depwarn("""
-        `newdir(ctx::FileSystemRoot)` is deprecated. Use the in-place
-        version `newdir(::FileTree, path)` instead.
-        """, :newdir)
-    path = mktempdir(sys_abspath(ctx), cleanup=false)
-    return FileTree(_temp_root(path))
-end
-
-function newfile(ctx::FileSystemRoot)
-    Base.depwarn("""
-        `newfile(ctx::FileSystemRoot)` is deprecated. Use the in-place
-        version `newfile(::FileTree, path)` instead.
-        """, :newfile)
-    path, io = mktemp(sys_abspath(ctx), cleanup=false)
-    close(io)
-    return File(_temp_root(path))
-end
-
-function newfile(f::Function, root::FileSystemRoot)
-    Base.depwarn("""
-        `newfile(f::Function, ctx::FileSystemRoot)` is deprecated.
-        Use newfile() or the in-place version `newfile(::FileTree, path)` instead.
-        """, :newfile)
-    path, io = mktemp(sys_abspath(root), cleanup=false)
-    try
-        f(io)
-    catch
-        rm(path)
-        rethrow()
-    finally
-        close(io)
-    end
-    return File(_temp_root(path))
-end
 

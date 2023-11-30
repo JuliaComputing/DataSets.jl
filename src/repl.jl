@@ -10,7 +10,7 @@ Press `>` to enter the data repl. Press TAB to complete commands.
 |   Command    | Alias     | Action      |
 |:----------   |:--------- | :---------- |
 | `help`       | `?`       | Show this message |
-| `list`       | `ls`      | List stack of projects and datasets by name |
+| `list`       | `ls`      | List all datasets by name |
 | `show $name` |           | Preview the content of dataset `$name` |
 | `stack` | `st`           | Manipulate the global data search stack |
 | `stack list` | `st ls`   | List all projects in the global data search stack |
@@ -64,7 +64,7 @@ function hexdump(out_stream, buf; groups_per_line=8, group_size=2, max_lines=typ
     end
 end
 
-function _show_dataset(out_stream::IO, blob::File)
+function _show_dataset(out_stream::IO, blob::Blob)
     @context begin
         io = @! open(IO, blob)
         N = 1024
@@ -76,7 +76,7 @@ function _show_dataset(out_stream::IO, blob::File)
         end
         display_lines, _ = displaysize(out_stream)
         max_lines = max(5, display_lines ÷ 2)
-        if length(str) == 0 || n_textlike / length(str) > 0.95
+        if n_textlike / length(str) > 0.95
             # It's approximately UTF-8 encoded text data - print as text
             lines = split(str, '\n', keepempty=true)
             nlines = min(lastindex(lines), max_lines)
@@ -97,7 +97,7 @@ function _show_dataset(out_stream::IO, blob::File)
     end
 end
 
-function _show_dataset(out_stream::IO, tree::FileTree)
+function _show_dataset(out_stream::IO, tree::BlobTree)
     show(out_stream, MIME("text/plain"), tree)
 end
 
@@ -127,6 +127,10 @@ function complete_command_list(cmd_prefix, commands)
     completions = String[]
     for cmdset in commands
         for cmd in cmdset
+            if cmd == cmd_prefix
+                # Space after full length command
+                return ([" "], "", true)
+            end
             if startswith(cmd, cmd_prefix)
                 push!(completions, cmd*" ")
                 break
@@ -205,14 +209,14 @@ function parse_data_repl_cmd(cmdstr)
     popfirst!(tokens)
     if cmd in ("list", "ls")
         return quote
-            $DataSets.PROJECT
+            $DataSets.DataProject($DataSets.PROJECT)
         end
     elseif cmd == "stack" && length(tokens) >= 1
         subcmd = popfirst!(tokens)
         if subcmd == "push"
             path = popfirst!(tokens)
             return quote
-                proj = $DataSets.data_project_from_path($path; depot_paths=DEPOT_PATH)
+                proj = $DataSets.data_project_from_path($path)
                 stack = $DataSets.PROJECT
                 pushfirst!(stack, proj)
                 stack

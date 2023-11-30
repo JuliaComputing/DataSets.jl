@@ -11,8 +11,17 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
     [datasets.storage]
     driver="FileSystem"
-    type="File"
-    path="data/file.txt"
+    type="Blob"
+    path="@__DIR__/data/file.txt"
+
+    # TODO: We'd like a layering abstraction.
+
+    # [[datasets.maps]]
+    # type="File"
+    #
+    # [[datasets.maps]]
+    # type="text"
+    # parameters={encoding="UTF-8"}
 
 [[datasets]]
 description="A text file with namespace"
@@ -21,8 +30,8 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
     [datasets.storage]
     driver="FileSystem"
-    type="File"
-    path="data/file.txt"
+    type="Blob"
+    path="@__DIR__/data/file.txt"
 
 #--------------------------------------------------
 [[datasets]]
@@ -32,8 +41,16 @@ uuid="2d126588-5f76-4e53-8245-87dc91625bf4"
 
     [datasets.storage]
     driver="FileSystem"
-    type="File"
-    path="data/people.csv.gz"
+    type="Blob"
+    path="@__DIR__/data/people.csv.gz"
+
+    #[[datasets.maps]]
+    #type="GZip"
+    #
+    #[[datasets.maps]]
+    #type="CSV"
+    #parameters={delim=","}
+
 
 #--------------------------------------------------
 [[datasets]]
@@ -42,8 +59,11 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
     [datasets.storage]
     driver="FileSystem"
-    type="FileTree"
-    path="data/csvset"
+    type="BlobTree"
+    path="@__DIR__/data/csvset"
+
+    # TODO: Add data maps here which expose it logically as a single CSV?
+
 
 #--------------------------------------------------
 # Data embedded in the TOML
@@ -55,7 +75,7 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
     [datasets.storage]
     driver="TomlDataStorage"
-    type="File"
+    type="Blob"
     data="AAAAAAAARUA="
 
 
@@ -66,7 +86,7 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
 
     [datasets.storage]
     driver="TomlDataStorage"
-    type="FileTree"
+    type="BlobTree"
 
 # TOML.print(Dict("datasets"=>[Dict("storage"=>Dict("data"=>Dict(["d0$i"=>Dict(["$x.txt"=>base64encode("$i $x content") for x in ("a","b")]...) for i in 1:4]...)))]))
 
@@ -85,3 +105,30 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
         [datasets.storage.data.d04]
         "b.txt" = "NCBiIGNvbnRlbnQ="
         "a.txt" = "NCBhIGNvbnRlbnQ="
+
+#--------------------------------------------------
+# Old backend API tests
+
+[[datasets]]
+description="Test old storage backend API, Blob"
+name="old_backend_blob"
+uuid="785b3cdc-428e-426f-a3f7-3f6ae88a9637"
+
+    [datasets.storage]
+    driver="OldBackendAPI"
+    type="Blob"
+    data="eA=="
+
+[[datasets]]
+description="Test old storage backend API, BlobTree"
+name="old_backend_tree"
+uuid="4af3a8a9-983b-487b-bfd8-804ca50b4a0c"
+
+    [datasets.storage]
+    driver="OldBackendAPI"
+    type="BlobTree"
+
+        [datasets.storage.data]
+        "b.txt" = "Yg=="
+        "a.txt" = "YQ=="
+
