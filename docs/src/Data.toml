@@ -13,11 +13,11 @@ uuid="b498f769-a7f6-4f67-8d74-40b770398f26"
     [datasets.storage]
     # The name of the storage driver.
     driver="FileSystem"
-    # Data stored in FileSystem is either File (a file) or FileTree (a directory/folder)
-    type="File"
+    # Data stored in FileSystem is either Blob (a file) or BlobTree (a directory/folder)
+    type="Blob"
     # Path with posix `/` separators.
-    # Relative paths are relative to the location of Data.toml
-    path="data/file.txt"
+    # Use @__DIR__ for paths relative to Data.toml
+    path="@__DIR__/data/file.txt"
 
 # A second example
 [[datasets]]
@@ -27,8 +27,8 @@ uuid="e7fd7080-e346-4a68-9ca9-98593a99266a"
 
     [datasets.storage]
     driver="FileSystem"
-    type="FileTree"
-    path="data/csvset"
+    type="BlobTree"
+    path="@__DIR__/data/csvset"
 
 # Further datasets can be added as desired
 # [[datasets]]

@@ -3,18 +3,12 @@
 ## Using datasets
 
 The primary mechanism for loading datasets is the `dataset` function, coupled
-with `open()` to open the resulting `DataSet` as some Julia type.
+with `open()` to open the resulting `DataSet` as some Julia type. In addition,
+DataSets.jl provides two macros [`@datafunc`](@ref) and [`@datarun`](@ref) to
+help in creating program entry points and running them.
 
 ```@docs
 dataset
-```
-
-In addition, DataSets.jl provides two macros [`@datafunc`](@ref) and
-[`@datarun`](@ref) to help in creating program entry points and running them.
-Note that these APIs aren't fully formed and might be deprecated before
-DataSets-1.0.
-
-```@docs
 @datafunc
 @datarun
 ```
@@ -52,31 +46,23 @@ DataSets.ActiveDataProject
 DataSets.TomlFileDataProject
 ```
 
-### Modifying datasets
-
-The metadata for a dataset may be updated using `config!`
-
-```@docs
-DataSets.config!
-```
-
 ## Data Models for files and directories
 
-DataSets provides some builtin data models [`File`](@ref) and
-[`FileTree`](@ref) for accessin file- and directory-like data respectively. For
+DataSets provides some builtin data models [`Blob`](@ref) and
+[`BlobTree`](@ref) for accessin file- and directory-like data respectively. For
 modifying these, the functions [`newfile`](@ref) and [`newdir`](@ref) can be
-used.
+used, together with `setindex!` for `BlobTree`.
 
 ```@docs
-File
-FileTree
+Blob
+BlobTree
 newfile
 newdir
 ```
 
 ## Storage Drivers
 
-To add a new kind of data storage backend, call [`DataSets.add_storage_driver`](@ref)
+To add a new kind of data storage backend, implement [`DataSets.add_storage_driver`](@ref)
 
 ```@docs
 DataSets.add_storage_driver

@@ -13,7 +13,7 @@ end
 
 function connect_dummy_backend(f, config, ds)
     storage = DummyBackend(config["data"])
-    f(File(storage))
+    f(Blob(storage))
 end
 
 function __init__()

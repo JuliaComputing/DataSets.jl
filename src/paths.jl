@@ -11,15 +11,14 @@ A `RelPath` is a *key* into a hierarchical string-indexed tree datastructure,
 with each component indexing one level of the hierarchy.
 
 As a key, the resource referred to by a path may or may not exist.
-Conversely, `FileTree` and `File` refer to the actual data stored with a given
+Conversely, `BlobTree` and `Blob` refer to the actual data stored with a given
 key.
 """
 struct RelPath <: AbstractPath
     components::Vector{String}
 end
 
-RelPath(path::RelPath) = path
-RelPath(str::AbstractString) = RelPath(split(str, '/'))
+RelPath(::AbstractString) = error("RelPath(::String) is not defined to avoid ambiguities between operating systems. Use  the `path\"...\"` string macro for path literals.")
 RelPath(components::AbstractVector=String[]) = RelPath(convert(Vector{String}, components))
 
 # Path manipulation.
@@ -74,7 +73,7 @@ end
 """
     An AbsPath is the *key* into a hierarchical tree index, relative to some root.
 
-The path is only a key; the resource pointed to by this key may or may not exist.
+As a *key*, the resource pointed to by this key may or may not exist.
 """
 struct AbsPath{Root} <: AbstractPath
     root::Root

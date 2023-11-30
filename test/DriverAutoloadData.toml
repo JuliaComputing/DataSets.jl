@@ -7,7 +7,7 @@ uuid="785b3cdc-428e-426f-a3f7-3f6ae88a9637"
 
     [datasets.storage]
     driver="DummyTomlStorage"
-    type="File"
+    type="Blob"
     data="data_from_dummy_backend"
 
 #-------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-data_config_version=1
+data_config_version=0
 
 [[datasets]]
 description="A text file"
@@ -7,5 +7,5 @@ uuid="314996ef-12be-40d0-912c-9755af354fdb"
 
     [datasets.storage]
     driver="FileSystem"
-    type="File"
-    path="data/file.txt"
+    type="Blob"
+    path="@__DIR__/data/file.txt"
