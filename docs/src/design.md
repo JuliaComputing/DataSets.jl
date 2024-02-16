@@ -93,7 +93,7 @@ names to `DataSet`s. Perhaps it also maintains the serialized `DataSet`
 information as well for those datasets which are not registered. It might be
 stored in a Data.toml, in analogy to Project.toml.
 
-Maintaince of the data project should occur via a data REPL.
+Maintenance of the data project should occur via a data REPL.
 
 ## Data Registries
 
@@ -277,4 +277,3 @@ array of strings)
   is restricted to tabular data, but seems similar in spirit to DataSets.jl.
 * [FileTrees.jl](http://shashi.biz/FileTrees.jl) provides tools for
   representing and processing tree-structured data lazily and in parallel.
-

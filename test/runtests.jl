@@ -101,13 +101,15 @@ end
 @testset "Data set name parsing" begin
     @testset "Valid name: $name" for name in (
         "a_b", "a-b", "a1", "δεδομένα", "a/b", "a/b/c", "a-", "b_",
+        "1", "a/1", "123", "12ab/34cd", "1/2/3", "1-2-3", "x_-__", "a---",
     )
         @test DataSets.check_dataset_name(name) === nothing
         @test DataSets._split_dataspec(name) == (name, nothing, nothing)
     end
 
     @testset "Invalid name: $name" for name in (
-        "1", "a b", "a.b", "a/b/", "a//b", "/a/b", "a/-", "a/1", "a/ _/b"
+        "a b", "a.b", "a/b/", "a//b", "/a/b", "a/-", "a/ _/b",
+        "a/-a", "a/-1",
     )
         @test_throws ErrorException DataSets.check_dataset_name(name)
         @test DataSets._split_dataspec(name) == (nothing, nothing, nothing)

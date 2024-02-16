@@ -84,14 +84,17 @@ end
 """
     check_dataset_name(name)
 
-Check whether a dataset name is valid. Valid names include start with a letter
-and may contain letters, numbers or `_`. Names may be hieracicial, with pieces
-separated with forward slashes. Examples:
+Check whether a dataset name is valid.
+
+Valid names must start with a letter or a number, the rest of the name can also contain `-`
+and `_` characters. The names can also be hieracicial, with segments separated by forward
+slashes (`/`). Each segment must also start with either a letter or a number. For example:
 
     my_data
     my_data_1
     username/data
-    organization-dataset_name/project/data
+    organization_name/project-name/data
+    123user/456dataset--name
 """
 function check_dataset_name(name::AbstractString)
     if !occursin(DATASET_NAME_REGEX, name)
@@ -101,10 +104,10 @@ end
 # DataSet names disallow most punctuation for now, as it may be needed as
 # delimiters in data-related syntax (eg, for the data REPL).
 const DATASET_NAME_REGEX_STRING = raw"""
-[[:alpha:]]
+[[:alnum:]]
 (?:
     [-[:alnum:]_]     |
-    / (?=[[:alpha:]])
+    / (?=[[:alnum:]])
 )*
 """
 const DATASET_NAME_REGEX = Regex("^\n$(DATASET_NAME_REGEX_STRING)\n\$", "x")
