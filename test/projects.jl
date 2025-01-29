@@ -39,7 +39,8 @@ test_project_names = ["a_text_file",
     # Test @__DIR__ templating
     # Use `cleanpath` as there's currently a mixture of / and \ on windows
     # which does work, but is quite ugly.
-    cleanpath(p) = replace(p, '\\'=>'/')
+    # Also use realpath to resolve any differences due to symbolic links.
+    cleanpath(p) = realpath(replace(p, '\\'=>'/'))
     @test cleanpath(proj["a_text_file"].storage["path"]) == cleanpath(joinpath(@__DIR__, "data", "file.txt"))
 end
 
