@@ -98,21 +98,27 @@ end
 end
 
 #-------------------------------------------------------------------------------
+function load_list(filename)
+    lines = eachline(joinpath(@__DIR__, filename))
+    filter(!isempty, strip.(lines))
+end
 @testset "Data set name parsing" begin
-    @testset "Valid name: $name" for name in (
-        "a_b", "a-b", "a1", "δεδομένα", "a/b", "a/b/c", "a-", "b_",
-        "1", "a/1", "123", "12ab/34cd", "1/2/3", "1-2-3", "x_-__", "a---",
-    )
-        @test DataSets.check_dataset_name(name) === nothing
-        @test DataSets._split_dataspec(name) == (name, nothing, nothing)
+    @testset "Valid names" begin
+        valid_names = load_list("dataset-names-valid.txt")
+        @test length(valid_names) == 16
+        @testset "Valid name: $name" for name in valid_names
+            @test DataSets.check_dataset_name(name) === nothing
+            @test DataSets._split_dataspec(name) == (name, nothing, nothing)
+        end
     end
 
-    @testset "Invalid name: $name" for name in (
-        "a b", "a.b", "a/b/", "a//b", "/a/b", "a/-", "a/ _/b",
-        "a/-a", "a/-1",
-    )
-        @test_throws ErrorException DataSets.check_dataset_name(name)
-        @test DataSets._split_dataspec(name) == (nothing, nothing, nothing)
+    @testset "Invalid names" begin
+        invalid_names = load_list("dataset-names-invalid.txt")
+        @test length(invalid_names) == 9
+        @testset "Invalid name: $name" for name in invalid_names
+            @test_throws ErrorException DataSets.check_dataset_name(name)
+            @test DataSets._split_dataspec(name) == (nothing, nothing, nothing)
+        end
     end
 end
 
