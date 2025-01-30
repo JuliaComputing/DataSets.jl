@@ -87,18 +87,39 @@ end
 Check whether a dataset name is valid.
 
 Valid names must start with a letter or a number, the rest of the name can also contain `-`
-and `_` characters. The names can also be hieracicial, with segments separated by forward
-slashes (`/`). Each segment must also start with either a letter or a number. For example:
+and `_` characters. The names can also be hierarchical, with segments separated by forward
+slashes (`/`) or (`.`). Each segment must also start with either a letter or a number.
+
+For example, the following dataset names are valid:
 
     my_data
     my_data_1
     username/data
     organization_name/project-name/data
     123user/456dataset--name
+    username/my_table.csv
+    dataset/v0.1.2
+
+whereas names like this are invalid:
+
+    __mydata__
+    username/.git
+    my...dataset
+
+!!! note "Segment separators"
+
+    In dataset names, both `/` and `.` are considered segment separators from a syntax
+    perspective. While DataSets.jl does not impose any specific interpretation on the
+    dataset name, it is recommended to use `/` to separate segments from a semantic
+    perspective, and to interpret each forward-slash-separated segment as a path separator.
+    Periods would conventionally be used to separate file extensions within a segment.
+
+    E.g. use `username/my-project-data/population.csv`, rather than
+    `username.my-project-data.population.csv` or something like that.
 """
 function check_dataset_name(name::AbstractString)
     if !occursin(DATASET_NAME_REGEX, name)
-        error("DataSet name \"$name\" is invalid. DataSet names must start with a letter and can contain only letters, numbers, `-`, `_` or `/`.")
+        error("DataSet name \"$name\" is invalid. DataSet names must start with a letter or a number, and can contain only letters, numbers, `-` and `_`, or `/` and `.` as segment separators.")
     end
 end
 # DataSet names disallow most punctuation for now, as it may be needed as
@@ -106,8 +127,9 @@ end
 const DATASET_NAME_REGEX_STRING = raw"""
 [[:alnum:]]
 (?:
-    [-[:alnum:]_]     |
-    / (?=[[:alnum:]])
+    [-[:alnum:]_]      |
+    \.(?=[[:alnum:]])  |
+    \/ (?=[[:alnum:]])
 )*
 """
 const DATASET_NAME_REGEX = Regex("^\n$(DATASET_NAME_REGEX_STRING)\n\$", "x")

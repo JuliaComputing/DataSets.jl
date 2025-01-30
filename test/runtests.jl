@@ -104,20 +104,48 @@ function load_list(filename)
 end
 @testset "Data set name parsing" begin
     @testset "Valid names" begin
-        valid_names = load_list("dataset-names-valid.txt")
-        @test length(valid_names) == 16
+        valid_names = load_list("testnames-valid.txt")
+        @test !isempty(valid_names)
         @testset "Valid name: $name" for name in valid_names
             @test DataSets.check_dataset_name(name) === nothing
             @test DataSets._split_dataspec(name) == (name, nothing, nothing)
+            # Also test that the name is still valid when it appears as part of
+            # a path elements.
+            let path_name = "foo/$(name)"
+                @test DataSets.check_dataset_name(path_name) === nothing
+                @test DataSets._split_dataspec(path_name) == (path_name, nothing, nothing)
+            end
+            let path_name = "$(name)/foo"
+                @test DataSets.check_dataset_name(path_name) === nothing
+                @test DataSets._split_dataspec(path_name) == (path_name, nothing, nothing)
+            end
+            let path_name = "foo/$(name)/bar"
+                @test DataSets.check_dataset_name(path_name) === nothing
+                @test DataSets._split_dataspec(path_name) == (path_name, nothing, nothing)
+            end
         end
     end
 
     @testset "Invalid names" begin
-        invalid_names = load_list("dataset-names-invalid.txt")
-        @test length(invalid_names) == 9
+        invalid_names = load_list("testnames-invalid.txt")
+        @test !isempty(invalid_names)
         @testset "Invalid name: $name" for name in invalid_names
             @test_throws ErrorException DataSets.check_dataset_name(name)
             @test DataSets._split_dataspec(name) == (nothing, nothing, nothing)
+            # Also test that the name is still invalid when it appears as part of
+            # a path elements.
+            let path_name = "foo/$(name)"
+                @test_throws ErrorException DataSets.check_dataset_name(path_name) === nothing
+                @test DataSets._split_dataspec(path_name) == (nothing, nothing, nothing)
+            end
+            let path_name = "$(name)/foo"
+                @test_throws ErrorException DataSets.check_dataset_name(path_name) === nothing
+                @test DataSets._split_dataspec(path_name) == (nothing, nothing, nothing)
+            end
+            let path_name = "foo/$(name)/bar"
+                @test_throws ErrorException DataSets.check_dataset_name(path_name) === nothing
+                @test DataSets._split_dataspec(path_name) == (nothing, nothing, nothing)
+            end
         end
     end
 end
