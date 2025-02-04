@@ -1,0 +1,25 @@
+a b
+a/b/
+a//b
+/a/b
+a/-
+a/ _/b
+a/-a
+a/-1
+.a
+..a
+a.
+a..
+.a.
+a..b
+.abc
+abc.
+abc/.def
+abc/def.
+a./b
+a.-
+_._
+a._b
+a.-b
+./a
+b/../a
