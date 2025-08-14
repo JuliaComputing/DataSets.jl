@@ -168,6 +168,7 @@ end
 # When we write the DataSet in the show() method above, we just dump the
 # underlying dictionary as TOML. However, not all Julia values can be serialized,
 # so we do a best-effort sanitization of the dictionary to ensure it is serializable.
+const _UNSERIALIZABLE_REPLACEMENT = "<unserializable>"
 function _sanitize_toml_object(d::AbstractDict)
     K, V = eltype(keys(d)), eltype(values(d))
     r = Dict{K,V}()
@@ -175,8 +176,10 @@ function _sanitize_toml_object(d::AbstractDict)
         # If the value is unserializable, we drop it from the output.
         # Otherwise we recurse into the value, since it might also be a dictionary
         # or an array.
-        if _serializable_toml_value(v)
-            r[k] = _sanitize_toml_object(v)
+        r[k] = if _serializable_toml_value(v)
+            _sanitize_toml_object(v)
+        else
+            _UNSERIALIZABLE_REPLACEMENT
         end
     end
     return r
@@ -185,17 +188,24 @@ function _sanitize_toml_object(v::AbstractVector)
     T = eltype(v)
     r = sizehint!(T[], length(v))
     for x in v
-        if _serializable_toml_value(x)
-            push!(r, _sanitize_toml_object(x))
+        y = if _serializable_toml_value(x)
+            _sanitize_toml_object(x)
+        else
+            _UNSERIALIZABLE_REPLACEMENT
         end
+        push!(r, y)
     end
     return r
 end
 _sanitize_toml_object(x::Any) = x
 
-# Should be overridden for any object that is not serializable into TOML
-_serializable_toml_value(::Any) = true
-_serializable_toml_value(::Nothing) = false
+# Should be overridden for any object that is TOML.jl can automatically
+# serialize into TOML
+_serializable_toml_value(::Any) = false
+_serializable_toml_value(::AbstractDict) = true
+_serializable_toml_value(::AbstractVector) = true
+_serializable_toml_value(::Real) = true
+_serializable_toml_value(::AbstractString) = true
 
 #-------------------------------------------------------------------------------
 """

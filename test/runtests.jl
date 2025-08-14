@@ -73,6 +73,9 @@ end
         @test parsed isa Dict
         @test parsed["name"] == "a_text_file"
         @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
+        @test parsed["foo"] == "<unserializable>"
+        @test parsed["bar"] == [1, 2, "<unserializable>", Dict("x" => "<unserializable>", "y" => "y")]
+        @test parsed["baz"] == Dict("x" => "<unserializable>", "y" => "y")
     end
 end
 
