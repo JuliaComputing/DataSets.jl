@@ -162,50 +162,14 @@ function Base.show(io::IO, d::DataSet)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
-    TOML.print(io, _sanitize_toml_object(d.conf))
-end
-
-# When we write the DataSet in the show() method above, we just dump the
-# underlying dictionary as TOML. However, not all Julia values can be serialized,
-# so we do a best-effort sanitization of the dictionary to ensure it is serializable.
-const _UNSERIALIZABLE_REPLACEMENT = "<unserializable>"
-function _sanitize_toml_object(d::AbstractDict)
-    K, V = eltype(keys(d)), eltype(values(d))
-    r = Dict{K,V}()
-    for (k, v) in pairs(d)
-        # If the value is unserializable, we drop it from the output.
-        # Otherwise we recurse into the value, since it might also be a dictionary
-        # or an array.
-        r[k] = if _serializable_toml_value(v)
-            _sanitize_toml_object(v)
-        else
-            _UNSERIALIZABLE_REPLACEMENT
-        end
+    # When we write the DataSet in the show() method above, we just dump the
+    # underlying dictionary as TOML. However, not all Julia values can be
+    # serialized, so we do a best-effort sanitization of the dictionary to
+    # ensure it is serializable.
+    TOML.print(io, d.conf) do _
+        "<unserializable>"
     end
-    return r
 end
-function _sanitize_toml_object(v::AbstractVector)
-    T = eltype(v)
-    r = sizehint!(T[], length(v))
-    for x in v
-        y = if _serializable_toml_value(x)
-            _sanitize_toml_object(x)
-        else
-            _UNSERIALIZABLE_REPLACEMENT
-        end
-        push!(r, y)
-    end
-    return r
-end
-_sanitize_toml_object(x::Any) = x
-
-# Should be overridden for any object that is TOML.jl can automatically
-# serialize into TOML
-_serializable_toml_value(::Any) = false
-_serializable_toml_value(::AbstractDict) = true
-_serializable_toml_value(::AbstractVector) = true
-_serializable_toml_value(::Real) = true
-_serializable_toml_value(::AbstractString) = true
 
 #-------------------------------------------------------------------------------
 """
