@@ -166,8 +166,13 @@ function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
     # underlying dictionary as TOML. However, not all Julia values can be
     # serialized, so we do a best-effort sanitization of the dictionary to
     # ensure it is serializable.
-    TOML.print(io, d.conf) do _
-        "<unserializable>"
+    try
+        TOML.print(io, d.conf) do _
+            "<unserializable>"
+        end
+    catch e
+        @debug "Failed to serialize DataSet to TOML" exception = (e, catch_backtrace())
+        print(io, "\n<unserializable>")
     end
 end
 

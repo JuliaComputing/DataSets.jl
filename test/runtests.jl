@@ -77,6 +77,24 @@ end
         @test parsed["bar"] == [1, 2, "<unserializable>", Dict("x" => "<unserializable>", "y" => "y")]
         @test parsed["baz"] == Dict("x" => "<unserializable>", "y" => "y")
     end
+
+    # Also test bad keys
+    config["datasets"][1]["keys"] = Dict(
+        nothing => 123,
+        1234 => "bad",
+    )
+    proj = DataSets.load_project(config)
+    ds = dataset(proj, "a_text_file")
+    let s = sprint(show, "text/plain", ds)
+        endswith(s, "\n... <unserializable>")
+        parsed = TOML.parse(s)
+        @test parsed isa Dict
+        @test parsed["name"] == "a_text_file"
+        @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
+        @test parsed["foo"] == "<unserializable>"
+        @test parsed["bar"] == [1, 2, "<unserializable>", Dict("x" => "<unserializable>", "y" => "y")]
+        @test parsed["baz"] == Dict("x" => "<unserializable>", "y" => "y")
+    end
 end
 
 @testset "open() for DataSet" begin
