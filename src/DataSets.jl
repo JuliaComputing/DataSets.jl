@@ -172,7 +172,7 @@ function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
         end
     catch e
         @debug "Failed to serialize DataSet to TOML" exception = (e, catch_backtrace())
-        print(io, "\n<unserializable>")
+        print(io, "\n... <unserializable>")
     end
 end
 
