@@ -162,9 +162,40 @@ function Base.show(io::IO, d::DataSet)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
-    TOML.print(io, d.conf)
+    TOML.print(io, _sanitize_toml_object(d.conf))
 end
 
+# When we write the DataSet in the show() method above, we just dump the
+# underlying dictionary as TOML. However, not all Julia values can be serialized,
+# so we do a best-effort sanitization of the dictionary to ensure it is serializable.
+function _sanitize_toml_object(d::AbstractDict)
+    K, V = eltype(keys(d)), eltype(values(d))
+    r = Dict{K,V}()
+    for (k, v) in pairs(d)
+        # If the value is unserializable, we drop it from the output.
+        # Otherwise we recurse into the value, since it might also be a dictionary
+        # or an array.
+        if _serializable_toml_value(v)
+            r[k] = _sanitize_toml_object(v)
+        end
+    end
+    return r
+end
+function _sanitize_toml_object(v::AbstractVector)
+    T = eltype(v)
+    r = sizehint!(T[], length(v))
+    for x in v
+        if _serializable_toml_value(x)
+            push!(r, _sanitize_toml_object(x))
+        end
+    end
+    return r
+end
+_sanitize_toml_object(x::Any) = x
+
+# Should be overridden for any object that is not serializable into TOML
+_serializable_toml_value(::Any) = true
+_serializable_toml_value(::Nothing) = false
 
 #-------------------------------------------------------------------------------
 """

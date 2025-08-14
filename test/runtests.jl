@@ -4,6 +4,7 @@ using DataSets
 using Test
 using UUIDs
 using ResourceContexts
+using TOML
 
 using DataSets: FileSystemRoot
 
@@ -45,6 +46,34 @@ end
 
     ds = dataset(proj, "a_text_file")
     @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
+
+    # Exercise the show() methods
+    let s = sprint(show, ds)
+        @test occursin("a_text_file", s)
+        @test occursin("b498f769-a7f6-4f67-8d74-40b770398f26", s)
+    end
+    let s = sprint(show, "text/plain", ds)
+        parsed = TOML.parse(s)
+        @test parsed isa Dict
+        @test parsed["name"] == "a_text_file"
+        @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
+    end
+
+    # Test show() methods when there are values that are not serializable
+    # into TOML in the Dict
+    config["datasets"][1]["foo"] = nothing
+    config["datasets"][1]["bar"] = [1, 2, nothing, Dict("x" => nothing, "y" => "y")]
+    config["datasets"][1]["baz"] = Dict(
+        "x" => nothing, "y" => "y",
+    )
+    proj = DataSets.load_project(config)
+    ds = dataset(proj, "a_text_file")
+    let s = sprint(show, "text/plain", ds)
+        parsed = TOML.parse(s)
+        @test parsed isa Dict
+        @test parsed["name"] == "a_text_file"
+        @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
+    end
 end
 
 @testset "open() for DataSet" begin
