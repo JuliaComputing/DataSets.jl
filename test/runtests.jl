@@ -4,6 +4,7 @@ using DataSets
 using Test
 using UUIDs
 using ResourceContexts
+using TOML
 
 using DataSets: FileSystemRoot
 
@@ -45,6 +46,58 @@ end
 
     ds = dataset(proj, "a_text_file")
     @test ds.uuid == UUID("b498f769-a7f6-4f67-8d74-40b770398f26")
+
+    # Exercise the show() methods
+    let s = sprint(show, ds)
+        @test occursin("a_text_file", s)
+        @test occursin("b498f769-a7f6-4f67-8d74-40b770398f26", s)
+    end
+    let s = sprint(show, "text/plain", ds)
+        parsed = TOML.parse(s)
+        @test parsed isa Dict
+        @test parsed["name"] == "a_text_file"
+        @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
+    end
+
+    # Test show() methods when there are values that are not serializable
+    # into TOML in the Dict
+    config["datasets"][1]["foo"] = nothing
+    config["datasets"][1]["bar"] = [1, 2, nothing, Dict("x" => nothing, "y" => "y")]
+    config["datasets"][1]["baz"] = Dict(
+        "x" => nothing, "y" => "y",
+    )
+    proj = DataSets.load_project(config)
+    ds = dataset(proj, "a_text_file")
+    let s = sprint(show, "text/plain", ds)
+        # It looks like that in Julia <= 1.8.0, the TOML.print(f, ...) variant
+        # for arbitrary types does not actually work, since it's missing the fallback
+        # implementation and has other bugs, depending on the Julia version.
+        #
+        # So the `show()`-ed TOML will not parse again. But since we have a try-catch anyway,
+        # we don't care too much, so we just run a simplified test in that case.
+        if VERSION >= v"1.9.0"
+            parsed = TOML.parse(s)
+            @test parsed isa Dict
+            @test parsed["name"] == "a_text_file"
+            @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
+            @test parsed["foo"] == "<unserializable>"
+            @test parsed["bar"] == [1, 2, "<unserializable>", Dict("x" => "<unserializable>", "y" => "y")]
+            @test parsed["baz"] == Dict("x" => "<unserializable>", "y" => "y")
+        else
+            @test occursin("<unserializable>", s)
+        end
+    end
+
+    # Also test bad keys
+    config["datasets"][1]["keys"] = Dict(
+        nothing => 123,
+        1234 => "bad",
+    )
+    proj = DataSets.load_project(config)
+    ds = dataset(proj, "a_text_file")
+    let s = sprint(show, "text/plain", ds)
+        endswith(s, "\n... <unserializable>\nSet JULIA_DEBUG=DataSets to see the error")
+    end
 end
 
 @testset "open() for DataSet" begin

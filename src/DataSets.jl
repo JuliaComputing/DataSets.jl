@@ -162,9 +162,20 @@ function Base.show(io::IO, d::DataSet)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
-    TOML.print(io, d.conf)
+    # When we write the DataSet in the show() method above, we just dump the
+    # underlying dictionary as TOML. However, not all Julia values can be
+    # serialized, so we do a best-effort sanitization of the dictionary to
+    # ensure it is serializable.
+    try
+        TOML.print(io, d.conf) do _
+            "<unserializable>"
+        end
+    catch e
+        @debug "Failed to serialize DataSet to TOML" exception = (e, catch_backtrace())
+        print(io, "\n... <unserializable>")
+        print(io, "\nSet JULIA_DEBUG=DataSets to see the error")
+    end
 end
-
 
 #-------------------------------------------------------------------------------
 """
