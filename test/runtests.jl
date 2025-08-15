@@ -69,13 +69,23 @@ end
     proj = DataSets.load_project(config)
     ds = dataset(proj, "a_text_file")
     let s = sprint(show, "text/plain", ds)
-        parsed = TOML.parse(s)
-        @test parsed isa Dict
-        @test parsed["name"] == "a_text_file"
-        @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
-        @test parsed["foo"] == "<unserializable>"
-        @test parsed["bar"] == [1, 2, "<unserializable>", Dict("x" => "<unserializable>", "y" => "y")]
-        @test parsed["baz"] == Dict("x" => "<unserializable>", "y" => "y")
+        # It looks like that in Julia <= 1.8.0, the TOML.print(f, ...) variant
+        # for arbitrary types does not actually work, since it's missing the fallback
+        # implementation and has other bugs, depending on the Julia version.
+        #
+        # So the `show()`-ed TOML will not parse again. But since we have a try-catch anyway,
+        # we don't care too much, so we just run a simplified test in that case.
+        if VERSION >= v"1.9.0"
+            parsed = TOML.parse(s)
+            @test parsed isa Dict
+            @test parsed["name"] == "a_text_file"
+            @test parsed["uuid"] == "b498f769-a7f6-4f67-8d74-40b770398f26"
+            @test parsed["foo"] == "<unserializable>"
+            @test parsed["bar"] == [1, 2, "<unserializable>", Dict("x" => "<unserializable>", "y" => "y")]
+            @test parsed["baz"] == Dict("x" => "<unserializable>", "y" => "y")
+        else
+            @test occursin("<unserializable>", s)
+        end
     end
 
     # Also test bad keys
@@ -86,7 +96,7 @@ end
     proj = DataSets.load_project(config)
     ds = dataset(proj, "a_text_file")
     let s = sprint(show, "text/plain", ds)
-        endswith(s, "\n... <unserializable>")
+        endswith(s, "\n... <unserializable>\nSet JULIA_DEBUG=DataSets to see the error")
     end
 end
 

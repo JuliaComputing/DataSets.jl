@@ -173,6 +173,7 @@ function Base.show(io::IO, ::MIME"text/plain", d::DataSet)
     catch e
         @debug "Failed to serialize DataSet to TOML" exception = (e, catch_backtrace())
         print(io, "\n... <unserializable>")
+        print(io, "\nSet JULIA_DEBUG=DataSets to see the error")
     end
 end
 
